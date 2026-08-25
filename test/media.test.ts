@@ -123,6 +123,43 @@ test('receiver serializes asynchronous frame rendering', async () => {
   assert.deepEqual(started, [1, 2]);
 });
 
+test('receiver joining mid-stream repairs instead of closing the peer', async () => {
+  const connection = new FakeConnection();
+  const renderer = new RecordingRenderer();
+  let firstFrames = 0;
+  new TextStreamReceiver(renderer, connection, () => { firstFrames += 1; });
+
+  // A codec switch attaches the receiver while the sender is mid-broadcast, so
+  // deltas keep arriving until the requested keyframe lands.
+  for (let frameId = 10; frameId < 14; frameId += 1) sendFrame(connection, frameId, false);
+  await settle();
+
+  assert.equal(connection.closeCount, 0);
+  assert.deepEqual(renderer.frames, []);
+  assert.deepEqual(connection.sent, [{ type: 'text-keyframe-request', afterFrameId: 10 }]);
+
+  sendFrame(connection, 14, true);
+  await settle();
+  assert.deepEqual(renderer.frames.map(({ frameId }) => frameId), [14]);
+  assert.equal(firstFrames, 1);
+});
+
+test('receiver still rejects chunks for a frame that was never announced', () => {
+  const connection = new FakeConnection();
+  const renderer = new RecordingRenderer();
+  new TextStreamReceiver(renderer, connection, () => {});
+  const unannounced = {
+    type: 'text-frame-chunk',
+    frameId: 99,
+    chunkIndex: 0,
+    data: new Uint8Array([1, 2, 3]),
+  } satisfies TextFrameChunkPacket;
+
+  for (let attempt = 0; attempt < TEXT_TRANSPORT_LIMITS.protocolViolations; attempt += 1) connection.receive(unannounced);
+
+  assert.equal(connection.closeCount, 1);
+});
+
 test('receiver closes a peer after repeated oversized packets', () => {
   const connection = new FakeConnection();
   const renderer = new RecordingRenderer();

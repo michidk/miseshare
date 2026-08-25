@@ -52,18 +52,33 @@ export type TextFramePacket = TextFrameStartPacket | TextFrameChunkPacket | Text
 
 type FrameListener = (frame: EncodedTextFrame) => void;
 
-const compress = (data: Uint8Array, level: number) => new Promise<Uint8Array>((resolve, reject) => {
-  zlib(data, { level: level as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 }, (error, output) => {
-    if (error) reject(error);
-    else resolve(output);
+/**
+ * fflate runs DEFLATE in a blob-URL worker and only forwards failures the
+ * worker itself can catch, so a worker that never starts leaves the callback
+ * pending forever. The deadline turns that into a rejection the capture loop
+ * and the render queue already know how to repair from.
+ */
+const WORKER_DEADLINE_MS = 10_000;
+
+function withDeadline(work: (settle: (error: Error | null, output: Uint8Array) => void) => void) {
+  return new Promise<Uint8Array>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error('The frame codec worker did not respond.')), WORKER_DEADLINE_MS);
+    work((error, output) => {
+      window.clearTimeout(timer);
+      if (error) reject(error);
+      else resolve(output);
+    });
   });
+}
+
+const compress = (data: Uint8Array, level: number) => withDeadline((settle) => {
+  zlib(data, { level: level as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 }, settle);
 });
 
-const decompress = (data: Uint8Array, expectedBytes: number) => new Promise<Uint8Array>((resolve, reject) => {
+const decompress = (data: Uint8Array, expectedBytes: number) => withDeadline((settle) => {
   unzlib(data, { size: expectedBytes }, (error, output) => {
-    if (error) reject(error);
-    else if (output.byteLength !== expectedBytes) reject(new Error('Decoded frame size does not match its metadata.'));
-    else resolve(output);
+    if (!error && output.byteLength !== expectedBytes) settle(new Error('Decoded frame size does not match its metadata.'), output);
+    else settle(error, output);
   });
 });
 

@@ -809,6 +809,7 @@ function upsertPresenter(presenter: PresenterInfo) {
   presenters.set(presenter.id, presenter);
   renderParticipantPresence();
   renderStreamCard(presenter);
+  attachLocalPresentationPreview(presenter.id);
   attachIncomingTextStream(presenter.id);
   attachIncomingNativeStream(presenter.id);
   updateStreamGrid();
@@ -881,9 +882,15 @@ function renderStreamCard(presenter: PresenterInfo) {
 
 function attachLocalPreview(stream: MediaStream, presenterId: string) {
   const video = streamCardMedia<HTMLVideoElement>(presenterId, 'video');
-  if (!video) return;
+  if (!video || video.srcObject === stream) return;
   video.srcObject = stream;
   void video.play().then(() => setCardConnected(presenterId)).catch(() => {});
+}
+
+/** Re-attaches the preview whenever a codec change rebuilds the local card. */
+function attachLocalPresentationPreview(presenterId: string) {
+  if (presenterId !== signaling?.participantId || !localPresentation) return;
+  attachLocalPreview(localPresentation.stream, presenterId);
 }
 
 function streamCardMedia<ElementType extends HTMLVideoElement | HTMLCanvasElement>(presenterId: string, tag: 'video' | 'canvas') {

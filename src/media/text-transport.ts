@@ -202,7 +202,14 @@ export class TextStreamReceiver {
 
   private addChunk(packet: TextFrameChunkPacket) {
     const frame = this.pending.get(packet.frameId);
-    if (!frame || packet.chunkIndex >= frame.chunkCount || frame.chunks[packet.chunkIndex]) {
+    if (!frame) {
+      // Frames skipped while awaiting a keyframe, and frames dropped by a
+      // repair, still have chunks in flight. Those are expected, so they are
+      // discarded instead of counting against the protocol violation budget.
+      if (packet.frameId > this.lastStartedFrameId) this.protocolViolation();
+      return;
+    }
+    if (packet.chunkIndex >= frame.chunkCount || frame.chunks[packet.chunkIndex]) {
       this.protocolViolation();
       return;
     }
