@@ -870,7 +870,13 @@ function renderStreamCard(presenter: PresenterInfo) {
   const name = card.querySelector('.stream-person strong');
   const settings = card.querySelector('.stream-person small');
   const audioState = card.querySelector('.audio-state');
-  if (avatar) avatar.textContent = initials(presenter.name);
+  const identity = presenter.isHost
+    ? { emoji: '👑', color: 0 }
+    : guestIdentityWithName(presenter.id, presenter.name);
+  if (avatar) {
+    avatar.className = `stream-avatar color-${identity.color}`;
+    avatar.textContent = identity.emoji;
+  }
   if (name) name.textContent = formatParticipantLabel(presenter.name, { isHost: presenter.isHost, isLocal });
   if (settings) settings.textContent = presenter.settings.label;
   if (audioState) {
@@ -1861,10 +1867,6 @@ function updateElapsedTimes() {
     const timestamp = Number(time.dataset.elapsedAt);
     if (Number.isFinite(timestamp)) time.textContent = formatElapsedTime(timestamp);
   });
-}
-
-function initials(name: string) {
-  return name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 }
 
 function toggleCardNotifications() {

@@ -637,7 +637,7 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 .chat-expand-button:hover .chat-expand-icon { background: rgba(49,88,245,.14); }
 .chat-expand-button svg { width: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .chat-expand-label { writing-mode: vertical-rl; }
-.chat-expand-dot { width: 9px; height: 9px; position: absolute; top: -3px; right: -3px; display: none; border: 2px solid var(--paper); border-radius: 50%; background: var(--blue); }
+.chat-expand-dot { width: 11px; height: 11px; position: absolute; top: -4px; right: -4px; display: none; border: 2.5px solid var(--white); border-radius: 50%; background: var(--blue); box-shadow: 0 1px 3px rgba(49,88,245,.35); }
 .chat-expand-button[data-unread] .chat-expand-dot { display: block; animation: chat-unread-in .2s ease-out; }
 @keyframes chat-unread-in { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .streams-panel { min-width: 0; min-height: min(720px, calc(100vh - 176px)); padding: 19px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,254,250,.72); box-shadow: 0 18px 55px rgba(43,39,30,.07); }
@@ -670,7 +670,14 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 .stream-connecting span { width: 8px; height: 8px; border: 2px solid #687ef0; border-top-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
 .stream-card footer { min-height: 58px; padding: 9px 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: white; background: #20232a; }
 .stream-person { min-width: 0; display: flex; align-items: center; gap: 9px; }
-.stream-avatar { width: 31px; height: 31px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 9px; color: #dfe4ff; background: #36415f; font-size: 9px; font-weight: 800; }
+.stream-avatar { width: 31px; height: 31px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 9px; background: #dce8ff; font-size: 16px; line-height: 1; }
+.stream-avatar.color-1 { background: #fce2c4; }
+.stream-avatar.color-2 { background: #d9f0df; }
+.stream-avatar.color-3 { background: #f4ddf3; }
+.stream-avatar.color-4 { background: #d6eff1; }
+.stream-avatar.color-5 { background: #f7e4a8; }
+.stream-avatar.color-6 { background: #e3defa; }
+.stream-avatar.color-7 { background: #f8dada; }
 .host-stream .stream-avatar { color: white; background: var(--blue); }
 .stream-person > span:last-child { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .stream-person strong, .stream-person small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -702,7 +709,7 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 .stream-button { min-height: 40px; padding: 0 14px; font-size: 10px; }
 .stream-button.stop-stream { color: #d94545; border: 1px solid rgba(239,78,78,.2); background: white; box-shadow: none; }
 
-.room-workspace > .room-sidebar { height: min(720px, calc(100vh - 176px)); min-height: 600px; margin-top: 0; gap: 12px; }
+.room-workspace > .room-sidebar { height: 0; min-height: 100%; margin-top: 0; gap: 12px; }
 .invite-strip { min-height: 66px; padding: 10px 10px 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,254,250,.78); box-shadow: 0 12px 35px rgba(43,39,30,.05); }
 .invite-strip > div { display: flex; flex-direction: column; gap: 3px; }
 .invite-strip > div span { color: var(--blue); font-size: 8px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
