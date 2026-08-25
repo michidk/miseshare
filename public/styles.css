@@ -25,7 +25,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-button, input { font: inherit; }
+button, input, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
 [hidden] { display: none !important; }
@@ -345,8 +345,57 @@ h1, h2, p { margin-top: 0; }
 .advanced-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 .advanced-panel { margin: 3px 6px 5px; padding: 12px 3px 3px; border-top: 1px solid var(--line); }
 .advanced-panel > label { margin-bottom: 11px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #66686f; font-size: 10px; font-weight: 700; }
-.advanced-panel select { width: 145px; height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; outline: 0; color: var(--ink); background: white; font-size: 10px; }
-.advanced-panel select:focus { border-color: rgba(49,88,245,.55); box-shadow: 0 0 0 3px rgba(49,88,245,.07); }
+.advanced-panel select {
+  width: 145px;
+  height: 36px;
+  padding: 0 34px 0 11px;
+  border: 1px solid rgba(23,25,31,.15);
+  border-radius: 10px;
+  outline: 0;
+  color: #30323a;
+  background-color: rgba(255,255,255,.92);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23666872' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  box-shadow: 0 1px 2px rgba(23,25,31,.04);
+  appearance: none;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 650;
+  transition: border-color .18s, box-shadow .18s, background-color .18s;
+}
+.advanced-panel select:hover { border-color: rgba(49,88,245,.36); background-color: white; }
+.advanced-panel select:focus-visible { border-color: rgba(49,88,245,.62); background-color: white; box-shadow: 0 0 0 3px rgba(49,88,245,.1), 0 2px 5px rgba(23,25,31,.06); }
+.advanced-panel select option { color: #30323a; background: white; font-weight: 550; }
+
+@supports (appearance: base-select) {
+  .advanced-panel select,
+  .advanced-panel select::picker(select) { appearance: base-select; }
+  .advanced-panel select { padding-right: 11px; background-image: none; }
+  .advanced-panel select::picker-icon { color: #696b73; transition: rotate .18s ease; }
+  .advanced-panel select:open::picker-icon { rotate: 180deg; }
+  .advanced-panel select::picker(select) {
+    margin-top: 5px;
+    padding: 5px;
+    border: 1px solid rgba(23,25,31,.12);
+    border-radius: 11px;
+    background: #fffefa;
+    box-shadow: 0 14px 34px rgba(36,39,49,.17), 0 2px 7px rgba(36,39,49,.08);
+  }
+  .advanced-panel select option {
+    min-height: 34px;
+    padding: 9px 10px;
+    align-items: center;
+    border-radius: 7px;
+    color: #484a52;
+    background: transparent;
+    cursor: pointer;
+  }
+  .advanced-panel select option:hover { color: #2446d3; background: rgba(49,88,245,.075); }
+  .advanced-panel select option:checked { color: #2446d3; background: rgba(49,88,245,.11); font-weight: 750; }
+  .advanced-panel select option::checkmark { margin-left: auto; color: var(--blue); }
+}
 .advanced-panel .bitrate-control { margin-top: 4px; display: block; }
 .bitrate-control > span:first-child { display: flex; justify-content: space-between; }
 .bitrate-control output { color: var(--blue); font-variant-numeric: tabular-nums; }
