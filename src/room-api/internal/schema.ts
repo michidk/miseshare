@@ -9,7 +9,6 @@ import {
   jsonb,
   pgTable,
   primaryKey,
-  smallint,
   text,
   timestamp,
 } from 'drizzle-orm/pg-core';
@@ -21,13 +20,10 @@ export const rooms = pgTable('rooms', {
   id: text('id').primaryKey(),
   hostId: text('host_id').notNull(),
   passwordHash: text('password_hash'),
-  maxParticipants: smallint('max_participants').notNull(),
   createdAt: timestampColumn('created_at').notNull().defaultNow(),
   expiresAt: timestampColumn('expires_at').notNull(),
   closedAt: timestampColumn('closed_at'),
-}, (table) => [
-  check('rooms_participant_limit_check', sql`${table.maxParticipants} between 2 and 20`),
-]);
+});
 
 export const roomParticipants = pgTable('room_participants', {
   id: text('id').notNull(),

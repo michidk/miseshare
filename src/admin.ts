@@ -231,7 +231,7 @@ function roomTable(title: string, roomRows: AdminDatabaseSnapshot['rooms'], now:
   return `<section class="panel">
     <header><div><span class="eyebrow">${active ? 'Live now' : 'Retained history'}</span><h2>${escapeHtml(title)}</h2></div><b>${roomRows.length}</b></header>
     <div class="table-wrap"><table><thead><tr><th>Room</th><th>Host</th><th>Status</th><th>Protected</th><th>Participants</th><th>Signals</th><th>Created</th><th>Expires / closed</th></tr></thead><tbody>
-      ${roomRows.map((room) => `<tr><td><strong>${escapeHtml(room.id)}</strong></td><td><code>${escapeHtml(room.hostId)}</code></td><td>${statusBadge(active ? 'active' : room.closedAt ? 'closed' : 'expired')}</td><td>${room.protected ? 'Yes' : 'No'}</td><td>${room.participantCount} / ${room.maxParticipants}</td><td>${room.signalCount}</td><td>${formatDate(room.createdAt)}</td><td>${room.closedAt ? `Closed ${formatRelative(room.closedAt, now)}` : formatRelative(room.expiresAt, now)}</td></tr>`).join('') || emptyRow(8, active ? 'No active sessions.' : 'No past sessions retained.')}
+      ${roomRows.map((room) => `<tr><td><strong>${escapeHtml(room.id)}</strong></td><td><code>${escapeHtml(room.hostId)}</code></td><td>${statusBadge(active ? 'active' : room.closedAt ? 'closed' : 'expired')}</td><td>${room.protected ? 'Yes' : 'No'}</td><td>${room.participantCount}</td><td>${room.signalCount}</td><td>${formatDate(room.createdAt)}</td><td>${room.closedAt ? `Closed ${formatRelative(room.closedAt, now)}` : formatRelative(room.expiresAt, now)}</td></tr>`).join('') || emptyRow(8, active ? 'No active sessions.' : 'No past sessions retained.')}
     </tbody></table></div>
   </section>`;
 }

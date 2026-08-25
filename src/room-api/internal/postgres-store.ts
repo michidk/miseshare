@@ -24,7 +24,7 @@ export class PostgresRoomStore implements RoomStore {
   private readonly database: RoomDatabase;
   private lastRateLimitCleanupAt = 0;
 
-  constructor(connectionString: string) {
+  constructor(connectionString: string, private readonly participantCapacity: number) {
     this.pool = new Pool({ connectionString: secureConnectionString(connectionString), max: 5, idleTimeoutMillis: 10_000 });
     this.database = drizzle(this.pool, { schema: { rooms, roomParticipants, roomSignals, requestRateLimits } });
   }
@@ -52,7 +52,6 @@ export class PostgresRoomStore implements RoomStore {
         id: room.id,
         hostId: room.hostId,
         passwordHash: room.passwordHash,
-        maxParticipants: room.maxParticipants,
         expiresAt: new Date(room.expiresAt),
       });
       await insertParticipant(transaction, host);
@@ -67,7 +66,7 @@ export class PostgresRoomStore implements RoomStore {
   async joinRoom(roomId: string, participant: StoredParticipant, now: number): Promise<JoinStoreResult> {
     return this.database.transaction(async (transaction) => {
       const [room] = await transaction
-        .select({ maxParticipants: rooms.maxParticipants })
+        .select({ id: rooms.id })
         .from(rooms)
         .where(and(eq(rooms.id, roomId), isNull(rooms.closedAt), gt(rooms.expiresAt, new Date(now))))
         .for('update');
@@ -83,7 +82,7 @@ export class PostgresRoomStore implements RoomStore {
         .from(roomParticipants)
         .where(eq(roomParticipants.roomId, roomId))
         .orderBy(roomParticipants.joinedAt);
-      if (members.length >= room.maxParticipants) return { status: 'full' };
+      if (members.length >= this.participantCapacity) return { status: 'full' };
 
       const existing = members.map(mapParticipant);
       const assignedParticipant = withUniqueGuestName(participant, existing);
@@ -306,7 +305,6 @@ export class PostgresRoomStore implements RoomStore {
         id: room.id,
         hostId: room.hostId,
         protected: room.passwordHash !== null,
-        maxParticipants: room.maxParticipants,
         createdAt: room.createdAt.getTime(),
         expiresAt: room.expiresAt.getTime(),
         closedAt: room.closedAt?.getTime() ?? null,
@@ -359,7 +357,6 @@ function mapRoom(room: typeof rooms.$inferSelect): StoredRoom {
     id: room.id,
     hostId: room.hostId,
     passwordHash: room.passwordHash,
-    maxParticipants: room.maxParticipants,
     expiresAt: room.expiresAt.getTime(),
     closed: room.closedAt !== null,
   };

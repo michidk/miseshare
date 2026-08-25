@@ -171,7 +171,7 @@ test('serves the app and public client configuration', async () => {
   const health = await fetch(`${baseUrl}/health`).then((response) => response.json());
   const liveness = await fetch(`${baseUrl}/health/live`);
   const configResponse = await fetch(`${baseUrl}/config`);
-  const config = await configResponse.json() as { iceServers: IceServerConfig[]; maxParticipants: number };
+  const config = await configResponse.json() as { iceServers: IceServerConfig[] };
   const favicon = await fetch(`${baseUrl}/favicon.svg`);
   const appClient = await fetch(`${baseUrl}/app.js`);
   const appClientSource = await appClient.text();
@@ -180,7 +180,6 @@ test('serves the app and public client configuration', async () => {
 
   assert.deepEqual(health, { ok: true });
   assert.deepEqual(await liveness.json(), { ok: true });
-  assert.equal(config.maxParticipants, 12);
   assert.deepEqual(config.iceServers, [{
     urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'],
   }]);
@@ -222,7 +221,7 @@ test('serves the app and public client configuration', async () => {
   assert.match(page, /720p 60 FPS/);
   assert.match(page, /1080p 60 FPS/);
   assert.match(page, /Choose resolution, frame rate, and compression/);
-  assert.match(page, /Browser video encoder/);
+  assert.doesNotMatch(page, /Browser video encoder|pipeline-summary/);
   assert.match(page, /Estimated upload/);
   assert.match(page, /id="stream-grid"/);
   assert.match(page, /id="leave-room-button"/);
@@ -234,6 +233,8 @@ test('serves the app and public client configuration', async () => {
   assert.match(page, /id="copy-room-code"/);
   assert.match(page, /class="room-privacy"/);
   assert.match(page, /encrypted between browsers/);
+  assert.match(page, /requires a direct peer-to-peer connection/);
+  assert.doesNotMatch(page, /TURN relay|may use a relay/);
   assert.match(page, /href="https:\/\/github\.com\/michidk\/mise"/);
 });
 
@@ -321,11 +322,10 @@ test('admin dashboard requires its password and renders a redacted database over
   assert.match(signals, /Signaling payload contents are masked/);
 });
 
-test('room API enforces passwords without accepting per-room participant limits', async () => {
+test('room API enforces passwords without room-specific capacity settings', async () => {
   const createdResponse = await roomRequest('', {
     method: 'POST',
-    // Older clients may still send this field; it must not reduce the deployment-wide capacity.
-    body: JSON.stringify({ password: 'correct horse', maxParticipants: 2 }),
+    body: JSON.stringify({ password: 'correct horse' }),
   });
   assert.equal(createdResponse.status, 201);
   const host = await createdResponse.json() as RoomIdentity;

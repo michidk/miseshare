@@ -102,6 +102,7 @@ const room = $('#room');
 const streamGrid = $('#stream-grid');
 const streamsEmpty = $('#streams-empty');
 const qualityMenu = $('#quality-menu');
+let qualityMenuAnchor: HTMLElement | null = null;
 const toast = $('#toast');
 const joinPasswordDialog = $<HTMLDialogElement>('#join-password-dialog');
 const joinPasswordInput = $<HTMLInputElement>('#join-password');
@@ -490,7 +491,7 @@ function handleRoomMessage(value: unknown) {
   if (!message) return;
   switch (message.type) {
     case 'room-full':
-      endViewer('This room has reached its participant limit.');
+      endViewer('The service has reached its participant capacity.');
       break;
     case 'room-closed':
       endViewer('The room was closed by its host.');
@@ -1594,8 +1595,8 @@ async function setQuality(name: QualityName, customSettings?: NativeVideoSetting
   });
   $('#custom-quality-panel').hidden = name !== 'custom';
   document.querySelector('[data-quality="custom"]')?.setAttribute('aria-expanded', String(name === 'custom'));
-  updatePipelineSummary();
   updateBandwidthEstimate();
+  positionQualityMenu();
   if (localPresentation) {
     const presenter = localPresenterInfo();
     upsertPresenter(presenter);
@@ -1612,7 +1613,6 @@ async function setQuality(name: QualityName, customSettings?: NativeVideoSetting
       viewerControl?.send({ type: 'settings-selected', streamSettings: settings });
     }
   }
-  closeQualityMenu();
   showToast(`${settings.buttonLabel}: ${settings.label}.`);
 }
 
@@ -1622,6 +1622,7 @@ function openCustomQuality() {
   });
   $('#custom-quality-panel').hidden = false;
   document.querySelector('[data-quality="custom"]')?.setAttribute('aria-expanded', 'true');
+  positionQualityMenu();
 }
 
 function customVideoSettings(): NativeVideoSettings {
@@ -1644,21 +1645,8 @@ function customVideoSettings(): NativeVideoSettings {
   };
 }
 
-function updatePipelineSummary() {
-  const summary = $('#pipeline-summary');
-  const title = summary.querySelector('span');
-  const badge = summary.querySelector('b');
-  const description = summary.querySelector('p');
-  const text = currentStreamSettings.codec === TEXT_CODEC_ID;
-  if (title) title.textContent = text ? 'Pixel-exact tile deltas' : 'Browser video encoder';
-  if (badge) badge.textContent = text ? 'DEFLATE' : 'WebRTC';
-  if (description) description.textContent = text
-    ? 'Only changed 128 px tiles are sent through the custom lossless text pipeline.'
-    : 'Resolution, frame rate, and bitrate are handled by the browser’s native WebRTC media pipeline.';
-}
-
 function updateBandwidthEstimate() {
-  const audience = localPresentation ? Math.max(0, session.participantCount - 1) : 0;
+  const audience = Math.max(1, session.participantCount - 1);
   const perPeer = currentStreamSettings.codec === NATIVE_VIDEO_CODEC_ID
     ? currentStreamSettings.bitrate / 1_000_000
     : currentStreamSettings.frameRate * 0.35;
@@ -1676,14 +1664,37 @@ function formatMbps(value: number) {
 
 function closeQualityMenu() {
   qualityMenu.hidden = true;
+  qualityMenuAnchor = null;
   document.querySelectorAll('[data-quality-trigger]').forEach((button) => button.setAttribute('aria-expanded', 'false'));
 }
 
 function toggleQualityMenu(button: HTMLElement) {
-  const willOpen = qualityMenu.hidden;
+  const reopen = qualityMenu.hidden || qualityMenuAnchor !== button;
   closeQualityMenu();
-  qualityMenu.hidden = !willOpen;
-  button.setAttribute('aria-expanded', String(willOpen));
+  if (!reopen) return;
+  qualityMenuAnchor = button;
+  qualityMenu.hidden = false;
+  positionQualityMenu();
+  button.setAttribute('aria-expanded', 'true');
+}
+
+function positionQualityMenu() {
+  if (!qualityMenuAnchor || qualityMenu.hidden) return;
+  const margin = 12;
+  const gap = 9;
+  const anchor = qualityMenuAnchor.getBoundingClientRect();
+  const spaceAbove = anchor.top - gap - margin;
+  const spaceBelow = window.innerHeight - anchor.bottom - gap - margin;
+  const above = spaceAbove >= spaceBelow;
+  qualityMenu.style.maxHeight = `${Math.max(220, Math.min(690, above ? spaceAbove : spaceBelow))}px`;
+  const width = qualityMenu.offsetWidth;
+  const height = qualityMenu.offsetHeight;
+  const left = Math.max(margin, Math.min(anchor.right - width, window.innerWidth - width - margin));
+  const top = above
+    ? Math.max(margin, anchor.top - gap - height)
+    : Math.min(anchor.bottom + gap, Math.max(margin, window.innerHeight - height - margin));
+  qualityMenu.style.left = `${Math.round(left)}px`;
+  qualityMenu.style.top = `${Math.round(top)}px`;
 }
 
 function makeChatMessage({ sender, senderId = '', author, text }: {
@@ -2030,6 +2041,8 @@ setInterval(updateElapsedTimes, 30_000);
 document.querySelectorAll<HTMLElement>('[data-quality-trigger]').forEach((button) => {
   button.addEventListener('click', () => toggleQualityMenu(button));
 });
+window.addEventListener('resize', positionQualityMenu);
+window.addEventListener('scroll', positionQualityMenu, { passive: true, capture: true });
 document.querySelectorAll<HTMLElement>('[data-quality]').forEach((button) => {
   button.addEventListener('click', () => {
     const quality = button.dataset.quality;

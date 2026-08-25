@@ -4,7 +4,6 @@ export interface StoredRoom {
   id: string;
   hostId: string;
   passwordHash: string | null;
-  maxParticipants: number;
   expiresAt: number;
   closed: boolean;
 }
@@ -27,7 +26,6 @@ export interface AdminRoomRecord {
   id: string;
   hostId: string;
   protected: boolean;
-  maxParticipants: number;
   createdAt: number;
   expiresAt: number;
   closedAt: number | null;

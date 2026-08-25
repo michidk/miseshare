@@ -24,7 +24,7 @@ test('signaling storage derives routing identity from the authenticated request'
       return true;
     },
   } as unknown as RoomStore;
-  const service = new RoomService(store, 12, () => 1_000);
+  const service = new RoomService(store, () => 1_000);
 
   await service.sendSignal('real-room', 'real-sender', 'token', {
     recipientId: 'recipient-123',
@@ -52,7 +52,7 @@ test('rate limits hash client identities and return a retry interval', async () 
       return { allowed: false, remaining: 0, retryAfterSeconds: 37 };
     },
   } as unknown as RoomStore;
-  const service = new RoomService(store, 12, () => 1_000);
+  const service = new RoomService(store, () => 1_000);
 
   await assert.rejects(
     () => service.enforceRateLimit('room-create', '203.0.113.42', { limit: 1, windowMs: 60_000 }),

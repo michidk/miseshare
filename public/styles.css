@@ -300,12 +300,12 @@ h1, h2, p { margin-top: 0; }
 .quality-button[aria-expanded="true"] .chevron { transform: rotate(180deg); }
 .quality-menu {
   width: 320px;
-  max-height: min(690px, calc(100vh - 180px));
+  max-height: min(690px, calc(100vh - 24px));
   padding: 9px;
   position: fixed;
   z-index: 20;
-  top: 92px;
-  right: max(18px, calc((100vw - 1280px) / 2));
+  top: 12px;
+  left: 12px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--white);
@@ -589,6 +589,7 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 .stream-count { padding: 7px 10px; border: 1px solid rgba(49,88,245,.13); border-radius: 999px; color: #66709b; background: rgba(49,88,245,.055); font-size: 9px; font-weight: 750; white-space: nowrap; }
 
 .stream-grid { min-height: 0; display: grid; flex: 1; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; gap: 12px; }
+.stream-grid:empty { display: none; }
 .stream-grid[data-count="1"] { grid-template-columns: minmax(0, 1fr); }
 .stream-grid[data-count="1"] .stream-card { width: min(100%, 1000px); margin: auto; }
 .stream-grid[data-count="3"] .stream-card:first-child { grid-column: 1 / -1; width: min(70%, 760px); justify-self: center; }
@@ -665,10 +666,6 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 .room-privacy svg { width: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 
 .quality-menu .coming-soon { padding: 4px 6px; border-radius: 5px; color: #7c7f88; background: #eceae5; font-size: 8px; font-weight: 800; text-transform: uppercase; }
-.pipeline-summary { margin: 9px 5px 0; padding: 11px; border-top: 1px solid var(--line); border-radius: 9px; color: #686b75; background: #f1efe9; font-size: 9px; }
-.pipeline-summary > span { font-weight: 750; }
-.pipeline-summary > b { margin-left: 6px; color: var(--blue); font-size: 8px; letter-spacing: .08em; }
-.pipeline-summary p { margin: 6px 0 0; color: #85878e; line-height: 1.45; }
 .quality-menu > .bandwidth-card { margin: 8px 5px 4px; }
 
 @keyframes spin { to { transform: rotate(360deg); } }

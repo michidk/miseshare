@@ -15,9 +15,9 @@ export interface RoomApi {
   close(): Promise<void>;
 }
 
-export function createRoomApi(options: { databaseUrl: string; maximumParticipants: number; rateLimiting?: boolean }): RoomApi {
-  const store: RoomStore = new PostgresRoomStore(options.databaseUrl);
-  const service = new RoomService(store, options.maximumParticipants, Date.now, options.rateLimiting ?? true);
+export function createRoomApi(options: { databaseUrl: string; participantCapacity: number; rateLimiting?: boolean }): RoomApi {
+  const store: RoomStore = new PostgresRoomStore(options.databaseUrl, options.participantCapacity);
+  const service = new RoomService(store, Date.now, options.rateLimiting ?? true);
   return {
     router: buildRoomRouter(service),
     adminSnapshot: (query) => store.adminSnapshot(query),

@@ -13,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
 const configuredMaximum = Number(process.env.MAX_PARTICIPANTS || process.env.MAX_VIEWERS || 12);
-const MAX_PARTICIPANTS = Number.isSafeInteger(configuredMaximum)
+const PARTICIPANT_CAPACITY = Number.isSafeInteger(configuredMaximum)
   ? Math.min(12, Math.max(2, configuredMaximum))
   : 12;
 const BASE_PATH = normalizeBasePath(process.env.BASE_PATH);
@@ -44,7 +44,7 @@ app.set('trust proxy', process.env.VERCEL ? 1 : environmentBoolean('TRUST_PROXY'
 const server = http.createServer(app);
 const roomApi = createRoomApi({
   databaseUrl,
-  maximumParticipants: MAX_PARTICIPANTS,
+  participantCapacity: PARTICIPANT_CAPACITY,
   rateLimiting: environmentBoolean('RATE_LIMIT_ENABLED', true),
 });
 await roomApi.migrate();
@@ -100,7 +100,7 @@ app.get([route('/health'), route('/health/ready')], async (_, response) => {
 });
 app.get(route('/config'), (_, response) => {
   response.set('Cache-Control', 'private, no-store');
-  response.json({ iceServers: iceServerFactory.create(), maxParticipants: MAX_PARTICIPANTS });
+  response.json({ iceServers: iceServerFactory.create() });
 });
 
 app.get(route('/emotes'), async (_, response) => {

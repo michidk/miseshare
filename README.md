@@ -80,7 +80,7 @@ Global Twitch, BetterTTV, FrankerFaceZ, and 7TV emotes are available without pro
 
 ## How it works
 
-- The REST API creates a random room code, hashes optional room passwords with scrypt, and atomically enforces the deployment-wide participant limit.
+- The REST API creates a random room code, hashes optional room passwords with scrypt, and atomically enforces the deployment-wide participant capacity.
 - Room, participant, and signaling records are short-lived. Host heartbeats extend the room while the tab is open; stale participants and signaling messages expire automatically.
 - Each browser receives an opaque participant token. The API hashes that token before storage and derives the signaling sender from the authenticated request rather than trusting client-provided identity.
 - Browsers exchange SDP descriptions and ICE candidates through authenticated REST mailboxes. Once negotiation completes, native `RTCPeerConnection` data channels and media tracks communicate over encrypted direct or TURN-relayed paths.

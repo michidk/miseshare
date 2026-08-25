@@ -24,7 +24,6 @@ export class RoomApiError extends Error {
 export class RoomService {
   constructor(
     private readonly store: RoomStore,
-    private readonly maximumParticipants: number,
     private readonly now: () => number = Date.now,
     private readonly rateLimiting = true,
   ) {}
@@ -39,7 +38,6 @@ export class RoomService {
       id: roomId,
       hostId,
       passwordHash: password ? await passwordHash(password) : null,
-      maxParticipants: this.maximumParticipants,
       expiresAt: now + ROOM_TTL_MS,
       closed: false,
     }, {
@@ -79,7 +77,7 @@ export class RoomService {
       isHost: false,
       lastSeenAt: now,
     }, now);
-    if (result.status === 'full') throw new RoomApiError('room-full', 409, 'This room has reached its participant limit.');
+    if (result.status === 'full') throw new RoomApiError('room-full', 409, 'The service has reached its participant capacity.');
     if (result.status === 'unavailable') throw unavailable();
     const participant = { id: participantId, name: result.participant.name, isHost: false };
     return {
