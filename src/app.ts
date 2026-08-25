@@ -1798,7 +1798,10 @@ function appendChatMessage(message: ChatMessage, playSound = true) {
   container.scrollTop = container.scrollHeight;
   if (playSound) {
     playChatSound();
-    if (!isOwn) roomNotifications.show({ kind: 'message', title: `${message.author} sent a message`, description: message.text });
+    if (!isOwn) {
+      roomNotifications.show({ kind: 'message', title: `${message.author} sent a message`, description: message.text });
+      markChatUnread();
+    }
   }
 }
 
@@ -1871,9 +1874,14 @@ function syncChatCollapsed() {
   $('#chat-expand-button').setAttribute('aria-expanded', String(!chatCollapsed));
 }
 
+function markChatUnread() {
+  if (chatCollapsed) $('#chat-expand-button').setAttribute('data-unread', '');
+}
+
 function setChatCollapsed(collapsed: boolean) {
   chatCollapsed = collapsed;
   try { localStorage.setItem('mise-chat-collapsed', collapsed ? 'yes' : 'no'); } catch {}
+  if (!collapsed) $('#chat-expand-button').removeAttribute('data-unread');
   syncChatCollapsed();
   if (!collapsed) queueMicrotask(() => room.querySelector<HTMLInputElement>('[data-chat-input]')?.focus());
 }

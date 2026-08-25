@@ -1,5 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="16" fill="#335cff"/>
-  <path d="M15 18h34v25H15zM24 51h16M32 43v8" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="m25 30 7-7 7 7M32 23v13" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+  <defs>
+    <linearGradient id="badge" x1="5" y1="1" x2="35" y2="39" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6a8dff"/>
+      <stop offset=".52" stop-color="#3158f5"/>
+      <stop offset="1" stop-color="#1f3dc4"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="20" y1="0" x2="20" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity=".32"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="40" height="40" rx="12.5" fill="url(#badge)"/>
+  <rect width="40" height="40" rx="12.5" fill="url(#gloss)"/>
+  <g fill="#fff">
+    <path fill-rule="evenodd" d="M11.5 9.9H28.5A3.5 3.5 0 0 1 32 13.4V21.4A3.5 3.5 0 0 1 28.5 24.9H11.5A3.5 3.5 0 0 1 8 21.4V13.4A3.5 3.5 0 0 1 11.5 9.9ZM20 13.1 24.6 17.7h-2.3v3a1.2 1.2 0 0 1-1.2 1.2h-2.2a1.2 1.2 0 0 1-1.2-1.2v-3h-2.3Z"/>
+    <path d="M18.6 24.9h2.8v2.7h-2.8zM15.4 27.6h9.2a1.2 1.2 0 0 1 0 2.4H15.4a1.2 1.2 0 0 1 0-2.4Z"/>
+  </g>
 </svg>
