@@ -30,7 +30,6 @@ export interface OutgoingSignal {
 
 export interface CreateRoomRequest {
   password?: string;
-  maxParticipants: number;
 }
 
 export interface JoinRoomRequest {

@@ -45,17 +45,9 @@
               </span>
               <span><small>Bring people together</small><strong>Create a room</strong></span>
             </div>
-            <p>Best for small groups, with room for up to 12 people.</p>
+            <p>Invite anyone you like — the room stays open until the service limit is reached.</p>
             <div class="room-create-options">
               <label><span>Password <small>Optional</small></span><input id="room-password" type="password" maxlength="128" autocomplete="new-password" placeholder="Add a password" /></label>
-              <div class="room-limit-field">
-                <label for="room-limit">People</label>
-                <div class="people-stepper">
-                  <button type="button" data-room-limit-step="-1" aria-label="Decrease room size"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
-                  <input id="room-limit" type="number" min="2" max="12" value="6" inputmode="numeric" />
-                  <button type="button" data-room-limit-step="1" aria-label="Increase room size"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></button>
-                </div>
-              </div>
             </div>
             <button id="share-button" class="button button-primary" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 14.5v-9ZM8 20h8M12 16v4"/></svg>
@@ -116,14 +108,13 @@
         <div class="viewer-bubble"><span class="avatar">AK</span><span><strong>Alex joined the room</strong><small>Just now</small></span></div>
       </div>
 
-      <div class="landing-footnote">Media is encrypted between browsers and may use a relay when a direct connection is unavailable. Room metadata is stored briefly to keep everyone connected.</div>
+      <div class="landing-footnote">Media is encrypted between browsers and requires a direct peer-to-peer connection. Room metadata is stored briefly to keep everyone connected.</div>
     </main>
 
     <main id="room" class="room-experience" hidden>
       <div class="room-topbar">
         <div class="room-identity">
-          <span id="room-status-dot" class="status-dot waiting"></span>
-          <div><span id="room-kicker">Connecting</span><h1 id="room-title">Room</h1></div>
+          <h1 id="room-title">Room</h1>
         </div>
         <div class="room-topbar-actions">
           <div class="participant-presence" aria-label="Room participants">
@@ -158,7 +149,6 @@
       <div class="room-workspace">
         <section class="streams-panel" aria-label="Shared screens">
           <div class="streams-heading">
-            <div><span class="live-label"><i></i> Live room</span><h2>Screens being shared</h2></div>
             <span id="stream-count" class="stream-count">No active streams</span>
           </div>
           <div id="stream-grid" class="stream-grid" aria-live="polite"></div>
@@ -215,7 +205,7 @@
         </aside>
         <button id="chat-expand-button" class="chat-expand-button" type="button" aria-label="Open chat" title="Open chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15a3 3 0 0 1-3 3H9l-5 3v-6a3 3 0 0 1-1-2.2V7a3 3 0 0 1 3-3h11a3 3 0 0 1 3 3v8Z"/><path d="m10 9 3 3-3 3"/></svg><span>Open chat</span></button>
       </div>
-      <p class="room-privacy"><svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2M6 10h12v10H6z"/></svg> Every stream is encrypted between browsers; a TURN relay may carry encrypted traffic when direct connectivity fails.</p>
+      <p class="room-privacy"><svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2M6 10h12v10H6z"/></svg> Every stream is encrypted between browsers and requires a direct peer-to-peer connection.</p>
     </main>
 
     <div id="quality-menu" class="quality-menu" hidden>

@@ -30,7 +30,6 @@ export class RoomService {
   ) {}
 
   async createRoom(input: CreateRoomRequest): Promise<RoomCredentials> {
-    const maxParticipants = validMaxParticipants(input.maxParticipants, this.maximumParticipants);
     const password = normalizePassword(input.password);
     const roomId = makeRoomId();
     const hostId = makeParticipantId();
@@ -40,7 +39,7 @@ export class RoomService {
       id: roomId,
       hostId,
       passwordHash: password ? await passwordHash(password) : null,
-      maxParticipants,
+      maxParticipants: this.maximumParticipants,
       expiresAt: now + ROOM_TTL_MS,
       closed: false,
     }, {
@@ -169,13 +168,6 @@ function makeParticipantId() {
 
 function validParticipantId(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{8,40}$/.test(value);
-}
-
-function validMaxParticipants(value: unknown, maximum: number) {
-  if (!Number.isSafeInteger(value) || Number(value) < 2 || Number(value) > maximum) {
-    throw new RoomApiError('invalid-participant-limit', 400, `Participant limit must be between 2 and ${maximum}.`);
-  }
-  return Number(value);
 }
 
 function normalizePassword(value: unknown) {

@@ -150,14 +150,14 @@ test('applies shared API rate limits with a retry interval', async () => {
       const response = await fetch(`http://127.0.0.1:${port}/api/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': identity },
-        body: JSON.stringify({ maxParticipants: 99 }),
+        body: JSON.stringify({ password: 'x'.repeat(129) }),
       });
       assert.equal(response.status, 400);
     }
     const blocked = await fetch(`http://127.0.0.1:${port}/api/rooms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': identity },
-      body: JSON.stringify({ maxParticipants: 99 }),
+      body: JSON.stringify({ password: 'x'.repeat(129) }),
     });
     assert.equal(blocked.status, 429);
     assert.match(requiredHeader(blocked, 'retry-after'), /^\d+$/);
@@ -214,7 +214,8 @@ test('serves the app and public client configuration', async () => {
   assert.match(page, />\s*Join room\s*</);
   assert.match(page, /id="join-password-dialog"/);
   assert.match(page, /Enter room password/);
-  assert.equal((page.match(/data-room-limit-step/g) || []).length, 2);
+  assert.doesNotMatch(page, /id="room-limit"|data-room-limit-step|people-stepper/);
+  assert.match(page, /until the service limit is reached/);
   assert.match(page, /Chat &amp; activity/);
   assert.equal((page.match(/data-participant-count/g) || []).length, 2);
   assert.match(page, /Stream quality/);
@@ -266,7 +267,7 @@ test('admin dashboard requires its password and renders a redacted database over
 
   const seededRooms: RoomIdentity[] = [];
   for (let index = 0; index < 27; index += 1) {
-    const created = await roomRequest('', { method: 'POST', body: JSON.stringify({ maxParticipants: 2 }) });
+    const created = await roomRequest('', { method: 'POST', body: '{}' });
     assert.equal(created.status, 201);
     seededRooms.push(await created.json() as RoomIdentity);
   }
@@ -320,16 +321,10 @@ test('admin dashboard requires its password and renders a redacted database over
   assert.match(signals, /Signaling payload contents are masked/);
 });
 
-test('room API enforces passwords and participant limits', async () => {
-  const invalidLimit = await roomRequest('', {
-    method: 'POST',
-    body: JSON.stringify({ maxParticipants: 13 }),
-  });
-  assert.equal(invalidLimit.status, 400);
-  assert.equal((await invalidLimit.json()).error.code, 'invalid-participant-limit');
-
+test('room API enforces passwords without accepting per-room participant limits', async () => {
   const createdResponse = await roomRequest('', {
     method: 'POST',
+    // Older clients may still send this field; it must not reduce the deployment-wide capacity.
     body: JSON.stringify({ password: 'correct horse', maxParticipants: 2 }),
   });
   assert.equal(createdResponse.status, 201);
@@ -356,18 +351,17 @@ test('room API enforces passwords and participant limits', async () => {
   assert.match(viewer.participant.name, /^Anonymous [A-Z][a-z]+ [A-Z][a-z]+$/);
   assert.deepEqual(viewer.participants.map(({ id }) => id), [host.participant.id]);
 
-  const fullResponse = await roomRequest(`/${host.roomId}/join`, {
+  const secondViewerResponse = await roomRequest(`/${host.roomId}/join`, {
     method: 'POST',
     body: JSON.stringify({ password: 'correct horse' }),
   });
-  assert.equal(fullResponse.status, 409);
-  assert.equal((await fullResponse.json()).error.code, 'room-full');
+  assert.equal(secondViewerResponse.status, 201);
 });
 
-test('room API assigns unique funny names through the full room capacity', async () => {
+test('room API assigns unique funny names and enforces the deployment capacity', async () => {
   const host = await roomRequest('', {
     method: 'POST',
-    body: JSON.stringify({ maxParticipants: 12 }),
+    body: '{}',
   }).then((response) => response.json());
   const names = [];
   for (let index = 1; index < 12; index += 1) {
@@ -380,12 +374,16 @@ test('room API assigns unique funny names through the full room capacity', async
   assert.equal(names.length, 11);
   assert.equal(new Set(names).size, names.length);
   assert.ok(names.every((name) => /^Anonymous [A-Z][a-z]+ [A-Z][a-z]+$/.test(name)));
+
+  const fullResponse = await roomRequest(`/${host.roomId}/join`, { method: 'POST', body: '{}' });
+  assert.equal(fullResponse.status, 409);
+  assert.equal((await fullResponse.json()).error.code, 'room-full');
 });
 
 test('room API relays authenticated WebRTC signaling through a durable mailbox', async () => {
   const host = await roomRequest('', {
     method: 'POST',
-    body: JSON.stringify({ maxParticipants: 3 }),
+    body: '{}',
   }).then((response) => response.json());
   const viewer = await roomRequest(`/${host.roomId}/join`, {
     method: 'POST',

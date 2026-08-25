@@ -168,7 +168,6 @@ const session = new RoomSession();
 let viewerControl: RtcChannel | undefined;
 let localPresentation: LocalPresentation | undefined;
 let shareAudioEnabled = false;
-let maxParticipants = 12;
 let currentStreamSettings: RoomStreamSettings = { ...qualityPresets['720p'] };
 let rtcConfig: RTCConfiguration = {
   iceServers: [{ urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'] }],
@@ -217,18 +216,9 @@ function appPath(pathname = ''): string {
 async function loadClientConfiguration(): Promise<RTCConfiguration> {
   const response = await fetch(appPath('config'), { cache: 'no-store' });
   if (!response.ok) throw new Error('Could not load the connection configuration.');
-  const config = await response.json() as { iceServers?: RTCIceServer[]; maxParticipants?: number };
+  const config = await response.json() as { iceServers?: RTCIceServer[] };
   if (!Array.isArray(config.iceServers)) throw new Error('The connection configuration is invalid.');
   rtcConfig = { iceServers: config.iceServers };
-  if (Number.isInteger(config.maxParticipants) && Number(config.maxParticipants) >= 2) {
-    maxParticipants = Number(config.maxParticipants);
-    const input = document.querySelector<HTMLInputElement>('#room-limit');
-    if (input) {
-      input.max = String(maxParticipants);
-      input.value = String(Math.min(Number(input.value) || maxParticipants, maxParticipants));
-    }
-    updateBandwidthEstimate();
-  }
   return rtcConfig;
 }
 
@@ -342,18 +332,15 @@ async function startRoom() {
     await configReady;
     signaling = await createRoom(appPath('api'), {
       password: optionalInputValue('#room-password'),
-      maxParticipants: selectedRoomLimit(),
     });
     session.startHosting(signaling.roomId, signaling.participantId);
     syncSignalingParticipants(signaling);
     history.replaceState({}, '', appPath(`room/${session.roomId}`));
     prepareRoomShell();
-    setRoomConnectionState('waiting', 'Opening room');
 
     startNativeMesh(signaling);
     session.markLive();
     setChatEnabled(true);
-    setRoomConnectionState('live', 'Host · room open');
     announceSystem('Host', 'joined the room.', 'joined');
     updateRoomUI();
   } catch (error: unknown) {
@@ -372,7 +359,6 @@ async function startRoom() {
 async function joinRoom(id: string, password = '') {
   session.startJoining(id);
   prepareRoomShell();
-  setRoomConnectionState('waiting', 'Connecting to host');
   await configReady;
   try {
     signaling = await joinSignalingRoom(appPath('api'), id, { password });
@@ -462,7 +448,6 @@ function routePeer(peerConnection: RtcPeerChannels) {
     viewerControl = peerConnection.control;
     viewerControl.on('message', handleRoomMessage);
     viewerControl.on('close', () => endViewer('The room is no longer available.'));
-    setRoomConnectionState('waiting', 'Waiting for host');
   }
   if (localPresentation) connectLocalStreamTo(peerConnection.peerId);
   attachIncomingTextStream(peerConnection.peerId);
@@ -513,7 +498,6 @@ function handleRoomMessage(value: unknown) {
     case 'accepted':
       session.markLive({ viewerName: message.name, hostId: message.hostId });
       setChatEnabled(true);
-      setRoomConnectionState('live', `${session.viewerName} · connected`);
       updateRoomUI();
       break;
     case 'chat-history':
@@ -979,11 +963,6 @@ function updateRoomUI() {
   audioButton.classList.toggle('muted', hasAudio && !audioEnabled);
   const label = audioButton.querySelector('span');
   if (label) label.textContent = audioEnabled ? 'Stop audio' : 'Resume audio';
-}
-
-function setRoomConnectionState(state: 'waiting' | 'live' | 'ended', label: string) {
-  $('#room-status-dot').className = `status-dot ${state}`;
-  $('#room-kicker').textContent = label;
 }
 
 function updateParticipantCount(count: number) {
@@ -1943,7 +1922,6 @@ function endViewer(message: string) {
   stopLocalPresentation();
   disposeConnections();
   setChatEnabled(false);
-  setRoomConnectionState('ended', message);
   $('#stream-button').disabled = true;
   showToast(message, 'error');
 }
@@ -2015,11 +1993,6 @@ function optionalInputValue(selector: string) {
   return document.querySelector<HTMLInputElement>(selector)?.value ?? '';
 }
 
-function selectedRoomLimit() {
-  const selected = Number.parseInt(optionalInputValue('#room-limit'), 10);
-  return Number.isSafeInteger(selected) ? Math.min(maxParticipants, Math.max(2, selected)) : maxParticipants;
-}
-
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
 }
@@ -2036,20 +2009,6 @@ $('#connection-check-run').addEventListener('click', () => void runConnectivityC
 
 document.querySelectorAll<HTMLInputElement>('[data-share-audio]').forEach((input) => {
   input.addEventListener('change', () => setShareAudio(input.checked));
-});
-
-document.querySelectorAll<HTMLButtonElement>('[data-room-limit-step]').forEach((button) => {
-  button.addEventListener('click', () => {
-    const input = document.querySelector<HTMLInputElement>('#room-limit');
-    if (!input) return;
-    const step = Number(button.dataset.roomLimitStep);
-    const current = Number.parseInt(input.value, 10) || 2;
-    input.value = String(Math.min(maxParticipants, Math.max(2, current + step)));
-  });
-});
-
-document.querySelector<HTMLInputElement>('#room-limit')?.addEventListener('change', (event) => {
-  (event.currentTarget as HTMLInputElement).value = String(selectedRoomLimit());
 });
 
 room.querySelector<HTMLFormElement>('[data-chat-form]')?.addEventListener('submit', (event) => {
