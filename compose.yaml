@@ -13,7 +13,7 @@ services:
     ports:
       - "127.0.0.1:54329:5432"
     volumes:
-      - miseshare-postgres:/var/lib/postgresql/data
+      - miseshare-postgres:/var/lib/postgresql
 
 volumes:
   miseshare-postgres:
