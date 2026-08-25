@@ -138,7 +138,7 @@ app.get(route('/room/:roomId'), (_, response) => response.type('html').send(room
 
 if (!process.env.VERCEL) {
   server.listen(PORT, HOST, () => {
-    console.log(`mise is ready at http://${HOST}:${PORT}${BASE_PATH || '/'}`);
+    console.log(`miseshare is ready at http://${HOST}:${PORT}${BASE_PATH || '/'}`);
   });
 }
 

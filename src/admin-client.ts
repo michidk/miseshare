@@ -41,7 +41,7 @@ if (root && content && title) {
     if (!result.data) return;
     content.innerHTML = result.data.content;
     title.textContent = result.data.title;
-    document.title = `${result.data.title} · mise admin`;
+    document.title = `${result.data.title} · miseshare admin`;
     document.querySelectorAll<HTMLElement>('[data-view]').forEach((link) => {
       link.classList.toggle('active', link.dataset.view === result.data?.view);
     });

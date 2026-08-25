@@ -1,14 +1,14 @@
 {
-  "name": "mise",
+  "name": "miseshare",
   "version": "0.1.0",
   "description": "A tiny, open-source, peer-to-peer screen sharing service.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/michidk/mise.git"
+    "url": "git+https://github.com/michidk/miseshare.git"
   },
   "bugs": {
-    "url": "https://github.com/michidk/mise/issues"
+    "url": "https://github.com/michidk/miseshare/issues"
   },
   "homepage": "https://miseshare.vercel.app",
   "type": "module",

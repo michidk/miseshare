@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const databaseUrl = process.env.DATABASE_URL ?? 'postgresql://mise:mise@127.0.0.1:54329/mise';
+const databaseUrl = process.env.DATABASE_URL ?? 'postgresql://miseshare:miseshare@127.0.0.1:54329/miseshare';
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
 const baseURL = `http://127.0.0.1:${port}`;
 

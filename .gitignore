@@ -3,10 +3,7 @@ node_modules/
 .env.*
 !.env.example
 .vercel/
-.playwright/*
-!.playwright/screenshots/
-.playwright/screenshots/*
-!.playwright/screenshots/mise.png
+.playwright/
 coverage/
 public/admin.js
 public/app.js

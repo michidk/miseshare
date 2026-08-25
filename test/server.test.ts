@@ -78,7 +78,7 @@ before(async () => {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   app = startedApp;
-  await waitForOutput(startedApp.stdout, 'mise is ready');
+  await waitForOutput(startedApp.stdout, 'miseshare is ready');
 });
 
 after(() => {
@@ -143,7 +143,7 @@ test('applies shared API rate limits with a retry interval', async () => {
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  await waitForOutput(rateLimitedApp.stdout, 'mise is ready');
+  await waitForOutput(rateLimitedApp.stdout, 'miseshare is ready');
   const identity = `2001:db8:${Date.now().toString(16).slice(-4)}:${Math.floor(Math.random() * 65_535).toString(16)}::1`;
   try {
     for (let attempt = 0; attempt < 60; attempt += 1) {
@@ -235,7 +235,7 @@ test('serves the app and public client configuration', async () => {
   assert.match(page, /encrypted between browsers/);
   assert.match(page, /requires a direct peer-to-peer connection/);
   assert.doesNotMatch(page, /TURN relay|may use a relay/);
-  assert.match(page, /href="https:\/\/github\.com\/michidk\/mise"/);
+  assert.match(page, /href="https:\/\/github\.com\/michidk\/miseshare"/);
 });
 
 test('admin dashboard requires its password and renders a redacted database overview', async () => {

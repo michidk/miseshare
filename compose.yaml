@@ -2,18 +2,18 @@ services:
   database:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: mise
-      POSTGRES_USER: mise
-      POSTGRES_PASSWORD: mise
+      POSTGRES_DB: miseshare
+      POSTGRES_USER: miseshare
+      POSTGRES_PASSWORD: miseshare
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mise -d mise"]
+      test: ["CMD-SHELL", "pg_isready -U miseshare -d miseshare"]
       interval: 5s
       timeout: 5s
       retries: 10
     ports:
       - "127.0.0.1:54329:5432"
     volumes:
-      - mise-postgres:/var/lib/postgresql/data
+      - miseshare-postgres:/var/lib/postgresql/data
 
 volumes:
-  mise-postgres:
+  miseshare-postgres:

@@ -1,8 +1,8 @@
-# mise
+# miseshare
 
 A deliberately small, open-source screen sharing service. Create a room, send a link, and let several participants share at once—no accounts, downloads, or persisted room history.
 
-[![mise landing page](.playwright/screenshots/mise.png)](https://miseshare.vercel.app)
+[![miseshare landing page](.github/images/miseshare.png)](https://miseshare.vercel.app)
 
 Live demo: [miseshare.vercel.app](https://miseshare.vercel.app)
 
@@ -19,7 +19,7 @@ The Node server and browser application are authored in strict TypeScript. The c
 ```bash
 npm install
 npm run db:up
-export DATABASE_URL='postgresql://mise:mise@127.0.0.1:54329/mise'
+export DATABASE_URL='postgresql://miseshare:miseshare@127.0.0.1:54329/miseshare'
 export ADMIN_PASSWORD='choose-a-strong-local-password'
 export ADMIN_SESSION_SECRET='generate-at-least-32-random-bytes'
 npm run db:migrate
@@ -57,7 +57,7 @@ Vercel serves files in `public/` from its CDN and runs the room REST API as stat
 | --- | --- | --- |
 | `PORT` | `3000` | HTTP port |
 | `HOST` | `0.0.0.0` | HTTP bind address |
-| `BASE_PATH` | _(empty)_ | Optional URL prefix, such as `/previews/mise` |
+| `BASE_PATH` | _(empty)_ | Optional URL prefix, such as `/previews/miseshare` |
 | `MAX_PARTICIPANTS` | `12` | Deployment ceiling for total room participants, including the host (2–12) |
 | `DATABASE_URL` | _(required)_ | PostgreSQL connection string; use Docker locally and Neon in production |
 | `ADMIN_PASSWORD` | _(required)_ | Password for the read-only `/admin` database dashboard |
