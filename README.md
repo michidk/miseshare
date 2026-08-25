@@ -67,8 +67,6 @@ Vercel serves files in `public/` from its CDN and runs the room REST API as stat
 | `RATE_LIMIT_ENABLED` | `true` | Enforce PostgreSQL-backed create, join, signal, and admin-login limits across instances |
 | `REQUEST_LOGGING` | production/Vercel: `true`; otherwise `false` | Emit structured request ID, status, path, and duration logs; server errors are always logged |
 | `EMOTES_ENABLED` | `true` | Load the global emote catalog and serve assets through the same-origin image proxy |
-| `TWITCH_CLIENT_ID` | _(optional)_ | Twitch application client ID used to load native global Twitch emotes |
-| `TWITCH_CLIENT_SECRET` | _(optional)_ | Twitch application secret; required with `TWITCH_CLIENT_ID` and kept server-side |
 | `STUN_URLS` | `stun:main.lohr.dev:3478,stun:stun.l.google.com:19302` | Comma-separated STUN URLs; the second default is a public fallback and non-STUN entries are ignored |
 | `TURN_URLS` | _(empty)_ | Comma-separated `turn:` or `turns:` URLs for a coturn-compatible relay |
 | `TURN_SHARED_SECRET` | _(required with `TURN_URLS`)_ | coturn REST authentication secret; never sent to browsers |
@@ -78,7 +76,7 @@ Browsers receive both defaults and may query them concurrently; WebRTC does not 
 
 For reliable connectivity across restrictive NATs and corporate networks, deploy coturn with its REST API shared-secret mechanism, then set `TURN_URLS` and `TURN_SHARED_SECRET`. The app creates short-lived HMAC credentials per `/config` request and refreshes them before ICE recovery; the shared secret never leaves the server. A normal HTTP reverse proxy does not replace TURN because it cannot relay WebRTC media.
 
-Global emote provider URLs are never exposed to the browser. The server validates provider hosts and image types, applies size and timeout limits, caches the result, and serves it from `/emotes/assets/:id`. Disable this optional outbound provider access with `EMOTES_ENABLED=false`.
+Global Twitch, BetterTTV, FrankerFaceZ, and 7TV emotes are available without provider credentials. Native Twitch emote metadata comes from the public Adam C Younis aggregate catalog. Provider URLs are never exposed to the browser. The server validates provider hosts and image types, applies size and timeout limits, caches the result, and serves it from `/emotes/assets/:id`. Disable this optional outbound provider access with `EMOTES_ENABLED=false`.
 
 ## How it works
 

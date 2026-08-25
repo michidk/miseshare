@@ -9,6 +9,7 @@ const ASSET_TTL_MS = 24 * 60 * 60 * 1_000;
 const MAX_ASSET_BYTES = 1024 * 1024;
 const MAX_CACHED_ASSETS = 256;
 const PROVIDER_TIMEOUT_MS = 8_000;
+const TWITCH_CATALOG_URL = 'https://emotes.adamcy.pl/v1/global/emotes/twitch';
 const ALLOWED_ASSET_HOSTS = new Set([
   'cdn.7tv.app',
   'cdn.betterttv.net',
@@ -122,16 +123,13 @@ async function loadSources(sources: EmoteSource[]) {
 }
 
 function providerSources(): EmoteSource[] {
-  const fetcher = new EmoteFetcher(process.env.TWITCH_CLIENT_ID, process.env.TWITCH_CLIENT_SECRET);
+  const fetcher = new EmoteFetcher();
   const providers: Array<[EmoteProvider, () => Promise<Map<string, RenderableEmote>>]> = [
     ['bttv', () => fetcher.fetchBTTVEmotes() as Promise<Map<string, RenderableEmote>>],
     ['ffz', () => fetcher.fetchFFZEmotes() as Promise<Map<string, RenderableEmote>>],
     ['7tv', () => fetcher.fetchSevenTVEmotes() as Promise<Map<string, RenderableEmote>>],
   ];
-  if (process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET) {
-    providers.push(['twitch', () => fetcher.fetchTwitchEmotes() as Promise<Map<string, RenderableEmote>>]);
-  }
-  return providers.map(([provider, load]) => ({
+  return [buildTwitchCatalogSource(), ...providers.map(([provider, load]) => ({
     async load() {
       const emotes = await load();
       return [...emotes.values()].flatMap((emote): RemoteEmote[] => {
@@ -145,7 +143,27 @@ function providerSources(): EmoteSource[] {
         }] : [];
       });
     },
-  }));
+  }))];
+}
+
+export function buildTwitchCatalogSource(catalogFetch: typeof fetch = fetch): EmoteSource {
+  return {
+    async load() {
+      const response = await catalogFetch(TWITCH_CATALOG_URL, { headers: { accept: 'application/json' } });
+      if (!response.ok) throw new Error(`Twitch catalog returned HTTP ${response.status}.`);
+      const catalog: unknown = await response.json();
+      if (!Array.isArray(catalog)) throw new Error('Twitch catalog returned an invalid response.');
+      return catalog.flatMap((value): RemoteEmote[] => {
+        if (!value || typeof value !== 'object') return [];
+        const candidate = value as { code?: unknown; urls?: unknown };
+        if (typeof candidate.code !== 'string' || !candidate.code || !Array.isArray(candidate.urls)) return [];
+        const image = candidate.urls.find((url) => url && typeof url === 'object'
+          && (url as { size?: unknown }).size === '1x') as { url?: unknown } | undefined;
+        if (!image || typeof image.url !== 'string' || !allowedAssetUrl(image.url)) return [];
+        return [{ name: candidate.code, sourceUrl: image.url, provider: 'twitch', animated: false }];
+      });
+    },
+  };
 }
 
 function assetId(url: string) {

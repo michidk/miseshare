@@ -1,6 +1,28 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildEmoteService } from '../src/emotes/index.js';
+import { buildTwitchCatalogSource } from '../src/emotes/internal/service.js';
+
+test('native Twitch emotes load from the credential-free aggregate catalog', async () => {
+  const source = buildTwitchCatalogSource(async () => Response.json([
+    {
+      provider: 0,
+      code: 'Kappa',
+      urls: [
+        { size: '2x', url: 'https://static-cdn.jtvnw.net/emoticons/v2/25/default/light/2.0' },
+        { size: '1x', url: 'https://static-cdn.jtvnw.net/emoticons/v2/25/default/light/1.0' },
+      ],
+    },
+    { provider: 0, code: 'unsafe', urls: [{ size: '1x', url: 'https://example.com/emote.png' }] },
+  ]));
+
+  assert.deepEqual(await source.load(), [{
+    name: 'Kappa',
+    sourceUrl: 'https://static-cdn.jtvnw.net/emoticons/v2/25/default/light/1.0',
+    provider: 'twitch',
+    animated: false,
+  }]);
+});
 
 test('emote catalogs expose only same-origin proxy URLs', async () => {
   const service = buildEmoteService({
