@@ -9,6 +9,7 @@ import {
 import {
   parseHostRoomMessage,
   parseViewerRoomMessage,
+  formatParticipantLabel,
   guestIdentity,
   guestIdentityCount,
   guestIdentityWithName,
@@ -869,8 +870,8 @@ function renderStreamCard(presenter: PresenterInfo) {
   const settings = card.querySelector('.stream-person small');
   const audioState = card.querySelector('.audio-state');
   if (avatar) avatar.textContent = initials(presenter.name);
-  if (name) name.textContent = `${presenter.name}${presenter.isHost ? ' · Host' : ''}${isLocal ? ' · You' : ''}`;
-  if (settings) settings.textContent = `${presenter.settings.buttonLabel} · ${presenter.settings.label}`;
+  if (name) name.textContent = formatParticipantLabel(presenter.name, { isHost: presenter.isHost, isLocal });
+  if (settings) settings.textContent = presenter.settings.label;
   if (audioState) {
     audioState.textContent = presenter.audioEnabled ? 'Audio on' : 'No audio';
     audioState.classList.toggle('off', !presenter.audioEnabled);
@@ -1024,7 +1025,7 @@ function renderParticipantPresence() {
       ? { name: 'Host', emoji: '👑', color: 0 }
       : assignedName ? guestIdentityWithName(participantId, assignedName) : guestIdentity(participantId);
     const name = assignedName || identity.name;
-    const label = `${name}${isHost ? ' · Host' : ''}${isLocal ? ' · You' : ''}${isSharing ? ' · Sharing' : ''}`;
+    const label = formatParticipantLabel(name, { isHost, isLocal, isSharing });
     const avatar = document.createElement('span');
     avatar.className = `participant-avatar color-${identity.color}${isHost ? ' host' : ''}${isSharing ? ' sharing' : ''}`;
     avatar.textContent = identity.emoji;

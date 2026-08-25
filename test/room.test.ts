@@ -2,11 +2,17 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   RoomSession,
+  formatParticipantLabel,
   guestIdentity,
   guestIdentityCount,
   parseHostRoomMessage,
   parseViewerRoomMessage,
 } from '../src/room/index.js';
+
+test('participant labels do not repeat a host name that already conveys the role', () => {
+  assert.equal(formatParticipantLabel('Host', { isHost: true, isLocal: true }), 'Host · You');
+  assert.equal(formatParticipantLabel('Morgan', { isHost: true, isSharing: true }), 'Morgan · Host · Sharing');
+});
 
 test('guest identities provide a complete stable cycle of funny fake animals', () => {
   const first = guestIdentity('participant-random-id');
