@@ -21,6 +21,7 @@ type IceServerConfig = { urls: string | string[] };
 
 let app: ChildProcessByStdio<null, Readable, Readable> | undefined;
 let baseUrl: string;
+const headHtml = '<script>window.__headHtmlLoaded = true;</script><noscript><img src="https://www.facebook.com/tr?id=test" alt=""></noscript>';
 
 const getAvailablePort = () => new Promise<number>((resolve, reject) => {
   const probe = net.createServer();
@@ -71,6 +72,7 @@ before(async () => {
       ADMIN_PASSWORD: '123',
       ADMIN_SESSION_SECRET: 'test-admin-session-secret-with-enough-entropy',
       EMOTES_ENABLED: 'false',
+      VITE_HEAD_HTML: `  ${headHtml}  `,
       RATE_LIMIT_ENABLED: 'false',
       PORT: String(port),
       STUN_URLS: 'turn:relay.invalid:3478, stun:main.lohr.dev:3478, stun:stun.l.google.com:19302',
@@ -126,6 +128,33 @@ test('rejects an undersized admin session secret', () => {
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /ADMIN_SESSION_SECRET must contain at least 32 bytes/);
+});
+
+test('leaves app HTML and CSP unchanged when trusted head HTML is unset', async () => {
+  const port = await getAvailablePort();
+  const { VITE_HEAD_HTML: _, ...env } = process.env;
+  const appWithoutHeadHtml = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
+    cwd: new URL('..', import.meta.url),
+    env: {
+      ...env,
+      ADMIN_PASSWORD: 'no-meta-test-password',
+      ADMIN_SESSION_SECRET: 'no-meta-test-session-secret-with-enough-entropy',
+      EMOTES_ENABLED: 'false',
+      PORT: String(port),
+      RATE_LIMIT_ENABLED: 'false',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  await waitForOutput(appWithoutHeadHtml.stdout, 'miseshare is ready');
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/`);
+    assert.doesNotMatch(await response.text(), /__headHtmlLoaded|facebook\.com/);
+    const policy = requiredHeader(response, 'content-security-policy');
+    assert.doesNotMatch(policy, /https:|unsafe-inline.*script|script-src[^;]*unsafe-inline/);
+    assert.match(policy, /script-src 'self';/);
+  } finally {
+    appWithoutHeadHtml.kill('SIGTERM');
+  }
 });
 
 test('applies shared API rate limits with a retry interval', async () => {
@@ -202,10 +231,17 @@ test('serves the app and public client configuration', async () => {
   assert.match(appClientSource, /text-keyframe-request/);
   assert.equal(landing.status, 200);
   assert.ok(landing.headers.get('x-request-id'));
-  assert.match(requiredHeader(landing, 'content-security-policy'), /img-src 'self' data:/);
-  assert.match(await landing.text(), /<base href="\.\/" \/>/);
+  const landingPolicy = requiredHeader(landing, 'content-security-policy');
+  const landingPage = await landing.text();
+  assert.match(landingPolicy, /connect-src 'self' https:/);
+  assert.match(landingPolicy, /img-src 'self' data: https:/);
+  assert.match(landingPolicy, /script-src 'self' https: 'unsafe-inline'/);
+  assert.match(landingPage, /<base href="\.\/" \/>/);
+  assert.ok(landingPage.includes(`${headHtml}\n  </head>`));
+  assert.match(landingPage, /<noscript><img src="https:\/\/www\.facebook\.com\/tr\?id=test"/);
   assert.equal(room.status, 200);
   const page = await room.text();
+  assert.ok(page.includes(`${headHtml}\n  </head>`));
   assert.match(page, /<base href="\.\.\/" \/>/);
   assert.match(page, /Create a room/);
   assert.match(page, /Start room/);

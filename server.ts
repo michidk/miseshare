@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import express from 'express';
+import express, { type Response } from 'express';
 import { createAdminRouter } from './src/admin.js';
 import { buildEmoteService } from './src/emotes/index.js';
 import { buildIceServerFactory } from './src/ice-config/index.js';
@@ -19,8 +19,7 @@ const PARTICIPANT_CAPACITY = Number.isSafeInteger(configuredMaximum)
 const BASE_PATH = normalizeBasePath(process.env.BASE_PATH);
 const publicDirectory = path.join(__dirname, 'public');
 const indexHtml = readFileSync(path.join(publicDirectory, 'index.html'), 'utf8');
-const landingHtml = indexHtml.replace('<base href="/" />', '<base href="./" />');
-const roomHtml = indexHtml.replace('<base href="/" />', '<base href="../" />');
+const headHtml = process.env.VITE_HEAD_HTML?.trim();
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('DATABASE_URL is required for room signaling.');
@@ -56,7 +55,7 @@ app.use((_, response, next) => {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'Permissions-Policy': 'camera=(), microphone=(), display-capture=(self)',
-    'Content-Security-Policy': "default-src 'self'; base-uri 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:",
+    'Content-Security-Policy': contentSecurityPolicy(),
   });
   next();
 });
@@ -133,8 +132,8 @@ app.use(BASE_PATH || '/', express.static(publicDirectory, {
   extensions: ['html'],
   maxAge: 0,
 }));
-app.get(route('/'), (_, response) => response.type('html').send(landingHtml));
-app.get(route('/room/:roomId'), (_, response) => response.type('html').send(roomHtml));
+app.get(route('/'), (_, response) => sendAppHtml(response, './'));
+app.get(route('/room/:roomId'), (_, response) => sendAppHtml(response, '../'));
 
 if (!process.env.VERCEL) {
   server.listen(PORT, HOST, () => {
@@ -159,6 +158,23 @@ function normalizeBasePath(value = ''): string {
 
 function route(pathname: string): string {
   return `${BASE_PATH}${pathname}`;
+}
+
+function sendAppHtml(response: Response, baseHref: string) {
+  response.set('Content-Security-Policy', contentSecurityPolicy(Boolean(headHtml)));
+  response.type('html').send(appHtml(baseHref));
+}
+
+function appHtml(baseHref: string): string {
+  const html = indexHtml.replace('<base href="/" />', `<base href="${baseHref}" />`);
+  if (!headHtml) return html;
+  return html.replace('</head>', `${headHtml}\n  </head>`);
+}
+
+function contentSecurityPolicy(allowTrustedHeadHtml = false): string {
+  const httpsSource = allowTrustedHeadHtml ? ' https:' : '';
+  const inlineScriptSource = allowTrustedHeadHtml ? " 'unsafe-inline'" : '';
+  return `default-src 'self'; base-uri 'self'; connect-src 'self'${httpsSource}; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:${httpsSource}; media-src 'self' blob:; object-src 'none'; script-src 'self'${httpsSource}${inlineScriptSource}; style-src 'self' 'unsafe-inline'${httpsSource}; worker-src 'self' blob:`;
 }
 
 function environmentBoolean(name: string, fallback: boolean) {

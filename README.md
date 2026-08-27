@@ -66,6 +66,7 @@ Vercel serves files in `public/` from its CDN and runs the room REST API as stat
 | `TRUST_PROXY` | `false` (Vercel configures one trusted hop) | Trust proxy-derived client IPs for rate limits; enable only behind a trusted proxy |
 | `RATE_LIMIT_ENABLED` | `true` | Enforce PostgreSQL-backed create, join, signal, and admin-login limits across instances |
 | `REQUEST_LOGGING` | production/Vercel: `true`; otherwise `false` | Emit structured request ID, status, path, and duration logs; server errors are always logged |
+| `VITE_HEAD_HTML` | _(empty)_ | Trusted markup injected verbatim into the app `<head>` at server startup |
 | `EMOTES_ENABLED` | `true` | Load the global emote catalog and serve assets through the same-origin image proxy |
 | `STUN_URLS` | `stun:main.lohr.dev:3478,stun:stun.l.google.com:19302` | Comma-separated STUN URLs; the second default is a public fallback and non-STUN entries are ignored |
 | `TURN_URLS` | _(empty)_ | Comma-separated `turn:` or `turns:` URLs for a coturn-compatible relay |
@@ -73,6 +74,13 @@ Vercel serves files in `public/` from its CDN and runs the room REST API as stat
 | `TURN_TTL_SECONDS` | `3600` | Lifetime of generated TURN credentials, from 60 to 86400 seconds |
 
 Browsers receive both defaults and may query them concurrently; WebRTC does not guarantee a strictly sequential failover order.
+
+`VITE_HEAD_HTML` accepts complete tags, such as a Meta Pixel `<script>` or a
+site-verification `<meta>` tag. Treat it as trusted executable configuration:
+never populate it from user input or another untrusted source. When configured,
+the app page's content security policy permits inline scripts and HTTPS origins
+needed by third-party analytics. Leave it unset to inject nothing and retain the
+strict default policy.
 
 For reliable connectivity across restrictive NATs and corporate networks, deploy coturn with its REST API shared-secret mechanism, then set `TURN_URLS` and `TURN_SHARED_SECRET`. The app creates short-lived HMAC credentials per `/config` request and refreshes them before ICE recovery; the shared secret never leaves the server. A normal HTTP reverse proxy does not replace TURN because it cannot relay WebRTC media.
 
