@@ -76,12 +76,14 @@ test('landing page does not overflow a mobile viewport', async ({ page }) => {
 
 async function pixelHash(locator: import('@playwright/test').Locator) {
   return locator.evaluate(async (source: HTMLCanvasElement | HTMLVideoElement) => {
+    const width = source instanceof HTMLVideoElement ? source.videoWidth : source.width;
+    const height = source instanceof HTMLVideoElement ? source.videoHeight : source.height;
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
+    canvas.width = width;
+    canvas.height = height;
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas rendering is unavailable.');
-    context.drawImage(source, 0, 0, 64, 64);
+    context.drawImage(source, 0, 0);
     const pixels = context.getImageData(0, 0, 64, 64).data;
     const digest = await crypto.subtle.digest('SHA-256', pixels);
     return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
