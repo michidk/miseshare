@@ -30,19 +30,30 @@ test('a participant can accept and download a peer-to-peer file drop', async ({ 
   await viewer.goto(page.url());
   await expect(viewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
 
+  const secondViewerContext = await browser.newContext();
+  const secondViewer = await secondViewerContext.newPage();
+  await secondViewer.goto(page.url());
+  await expect(secondViewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
+
   await page.locator('#drop-button').click();
-  await expect(page.locator('#drop-peer-count')).toHaveText('1 connected peer', { timeout: 20_000 });
+  await expect(page.locator('#drop-peer-count')).toHaveText('2 connected peers', { timeout: 20_000 });
   await page.locator('#drop-file-input').setInputFiles({
     name: 'hello.txt',
     mimeType: 'text/plain',
     buffer: Buffer.from('hello over WebRTC'),
   });
 
-  await expect(viewer.locator('#drop-dialog')).toBeVisible();
-  await expect(viewer.locator('.drop-transfer')).toContainText('hello.txt');
-  await viewer.locator('.drop-accept').click();
-  const downloadLink = viewer.locator('.drop-download');
+  await expect(page.locator('.drop-transfer')).toHaveCount(1);
+  await expect(page.locator('.drop-transfer')).toContainText('To 2 recipients');
+  const viewerRequest = viewer.locator('[data-chat-file-request]');
+  const secondViewerRequest = secondViewer.locator('[data-chat-file-request]');
+  await expect(viewerRequest).toContainText('hello.txt');
+  await expect(secondViewerRequest).toContainText('hello.txt');
+  await viewerRequest.locator('.chat-file-accept').click();
+  await secondViewerRequest.locator('.chat-file-accept').click();
+  const downloadLink = viewerRequest.locator('.chat-file-download');
   await expect(downloadLink).toBeVisible({ timeout: 20_000 });
+  await expect(secondViewerRequest.locator('.chat-file-download')).toBeVisible({ timeout: 20_000 });
   const downloadPromise = viewer.waitForEvent('download');
   await downloadLink.click();
   const download = await downloadPromise;
@@ -51,7 +62,8 @@ test('a participant can accept and download a peer-to-peer file drop', async ({ 
   for await (const chunk of stream) chunks.push(Buffer.from(chunk));
   expect(download.suggestedFilename()).toBe('hello.txt');
   expect(Buffer.concat(chunks).toString()).toBe('hello over WebRTC');
-  await expect(page.locator('.drop-transfer')).toContainText('Sent');
+  await expect(page.locator('.drop-transfer')).toContainText('Sent to 2 recipients');
+  await secondViewerContext.close();
   await viewerContext.close();
 });
 

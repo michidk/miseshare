@@ -735,6 +735,26 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 .room-workspace .activity-left > i, .room-workspace .activity-stream-stopped > i { background: var(--red); }
 .room-workspace .activity-settings > i { background: var(--blue); }
 .room-workspace .chat-activity span { white-space: normal; }
+.chat-file-transfer { padding: 10px; border: 1px solid rgba(49,88,245,.16); border-radius: 11px; background: rgba(49,88,245,.055); }
+.chat-file-heading { display: flex; align-items: center; gap: 8px; }
+.chat-file-heading > span:first-child { width: 28px; height: 28px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 8px; color: var(--blue); background: white; }
+.chat-file-heading svg { width: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.chat-file-heading > span:last-child { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.chat-file-heading strong { overflow: hidden; color: #555863; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.chat-file-heading small { color: #888b94; font-size: 7px; }
+.chat-file-info { margin-top: 9px; padding: 8px 9px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid rgba(23,25,31,.08); border-radius: 8px; background: rgba(255,255,255,.74); }
+.chat-file-info strong { min-width: 0; overflow: hidden; color: #454850; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.chat-file-info span { flex: 0 0 auto; color: #92949b; font-size: 7px; }
+.chat-file-progress { height: 3px; margin: 8px 1px 0; overflow: hidden; border-radius: 999px; background: rgba(49,88,245,.12); }
+.chat-file-progress i { width: var(--drop-progress, 0%); height: 100%; display: block; border-radius: inherit; background: var(--blue); transition: width .15s linear; }
+.chat-file-actions { margin-top: 8px; display: flex; justify-content: flex-end; gap: 6px; }
+.chat-file-actions button, .chat-file-actions a { min-height: 29px; padding: 0 9px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 7px; color: #666972; background: white; cursor: pointer; font: inherit; font-size: 7px; font-weight: 750; text-decoration: none; }
+.chat-file-actions .chat-file-accept, .chat-file-actions .chat-file-download { border-color: var(--blue); color: white; background: var(--blue); }
+.chat-file-actions button:hover, .chat-file-actions a:hover { border-color: rgba(49,88,245,.3); color: var(--blue); background: rgba(49,88,245,.06); }
+.chat-file-actions .chat-file-accept:hover, .chat-file-actions .chat-file-download:hover { color: white; background: var(--blue-dark); }
+.chat-file-transfer[data-status="completed"] { border-color: rgba(39,165,109,.18); background: rgba(39,165,109,.06); }
+.chat-file-transfer[data-status="completed"] .chat-file-heading > span:first-child { color: var(--green); }
+.chat-file-transfer[data-status="declined"], .chat-file-transfer[data-status="cancelled"], .chat-file-transfer[data-status="error"] { border-color: rgba(209,67,67,.14); background: rgba(209,67,67,.045); }
 .room-privacy { margin: 15px 0 0; display: flex; align-items: center; justify-content: center; gap: 7px; color: #858681; font-size: 9px; }
 .room-privacy svg { width: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 

@@ -93,6 +93,8 @@ interface IncomingConnectivityTransfer {
   timer: ReturnType<typeof setTimeout>;
 }
 
+type DropTransferView = DropTransferUpdate & { downloadUrl?: string };
+
 const $ = <ElementType extends Element = AppElement>(selector: string) => {
   const element = document.querySelector<ElementType>(selector);
   if (!element) throw new Error(`Missing required element: ${selector}`);
@@ -197,7 +199,7 @@ const pendingConnectivityDownloads = new Map<string, PendingConnectivityTransfer
 const pendingConnectivityUploads = new Map<string, PendingConnectivityTransfer>();
 const incomingConnectivityUploads = new Map<string, IncomingConnectivityTransfer>();
 const connectivityDownloadResponseAt = new Map<string, number>();
-const dropTransfers = new Map<string, DropTransferUpdate & { downloadUrl?: string }>();
+const dropTransfers = new Map<string, DropTransferView>();
 const drop = new P2pDrop({ update: handleDropUpdate });
 const CONNECTIVITY_PROBE_BYTES = 512 * 1024;
 const CONNECTIVITY_CHUNK_BYTES = 32 * 1024;
@@ -2054,22 +2056,105 @@ function handleDropUpdate(update: DropTransferUpdate) {
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     downloadUrl = URL.createObjectURL(update.blob);
   }
-  dropTransfers.set(transferKey, { ...update, downloadUrl });
+  const stored = { ...update, downloadUrl };
+  dropTransfers.set(transferKey, stored);
   trimDropTransfers();
   renderDropTransfers();
+  renderDropChatTransfer(stored);
   if (update.direction === 'incoming' && update.status === 'offered' && !existing) {
-    openDropDialog();
+    markChatUnread();
     showToast(`${dropPeerName(update.peerId)} wants to send ${update.name}.`);
   } else if (update.direction === 'incoming' && update.status === 'completed') {
     showToast(`${update.name} is ready to download.`);
   }
 }
 
+function renderDropChatTransfer(transfer: DropTransferView) {
+  if (transfer.direction !== 'incoming') return;
+  const container = room.querySelector<HTMLElement>('[data-chat-messages]');
+  if (!container) return;
+  const transferKey = dropTransferKey(transfer);
+  let card = container.querySelector<HTMLElement>(`[data-chat-file-request="${CSS.escape(transferKey)}"]`);
+  if (!card) {
+    card = document.createElement('article');
+    card.className = 'chat-file-transfer';
+    card.dataset.chatFileRequest = transferKey;
+    container.querySelector('[data-chat-empty]')?.remove();
+    container.append(card);
+    while (container.querySelectorAll('[data-chat-file-request]').length > 20) {
+      container.querySelector('[data-chat-file-request]')?.remove();
+    }
+  }
+  card.dataset.status = transfer.status;
+  card.replaceChildren();
+
+  const heading = document.createElement('div');
+  heading.className = 'chat-file-heading';
+  const icon = document.createElement('span');
+  icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7zM14 3v5h5M10 13h5M10 17h5"/></svg>';
+  const headingCopy = document.createElement('span');
+  const sender = document.createElement('strong');
+  sender.textContent = dropPeerName(transfer.peerId);
+  const state = document.createElement('small');
+  state.textContent = dropChatStatusLabel(transfer);
+  headingCopy.append(sender, state);
+  heading.append(icon, headingCopy);
+
+  const file = document.createElement('div');
+  file.className = 'chat-file-info';
+  const name = document.createElement('strong');
+  name.textContent = transfer.name;
+  name.title = transfer.name;
+  const size = document.createElement('span');
+  size.textContent = formatDropBytes(transfer.size);
+  file.append(name, size);
+  card.append(heading, file);
+
+  if (['receiving', 'completed'].includes(transfer.status)) {
+    const progress = document.createElement('div');
+    progress.className = 'chat-file-progress';
+    const bar = document.createElement('i');
+    bar.style.setProperty('--drop-progress', dropPercent(transfer));
+    progress.append(bar);
+    card.append(progress);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'chat-file-actions';
+  if (transfer.status === 'offered') {
+    actions.append(
+      dropAction('Decline', 'chat-file-decline', () => drop.decline(transfer.peerId, transfer.id)),
+      dropAction('Accept', 'chat-file-accept', () => drop.accept(transfer.peerId, transfer.id)),
+    );
+  } else if (transfer.status === 'receiving') {
+    actions.append(dropAction('Cancel', 'chat-file-cancel', () => drop.cancel(transfer.peerId, transfer.id)));
+  } else if (transfer.status === 'completed' && transfer.downloadUrl) {
+    const download = document.createElement('a');
+    download.className = 'chat-file-download';
+    download.href = transfer.downloadUrl;
+    download.download = transfer.name;
+    download.textContent = 'Download';
+    actions.append(download);
+  }
+  if (actions.childElementCount) card.append(actions);
+  container.scrollTop = container.scrollHeight;
+}
+
+function dropChatStatusLabel(transfer: DropTransferView) {
+  if (transfer.status === 'offered') return 'wants to send you a file';
+  if (transfer.status === 'receiving') return `${dropPercent(transfer)} received`;
+  if (transfer.status === 'completed') return 'file ready to download';
+  if (transfer.status === 'declined') return 'file declined';
+  if (transfer.status === 'cancelled') return 'transfer cancelled';
+  return transfer.error || 'transfer failed';
+}
+
 function renderDropTransfers() {
   const list = $('#drop-transfer-list');
   list.replaceChildren();
   const transfers = [...dropTransfers.values()].reverse();
-  if (!transfers.length) {
+  const transferGroups = groupDropTransfers([...dropTransfers.values()]).reverse();
+  if (!transferGroups.length) {
     const empty = document.createElement('p');
     empty.className = 'drop-empty';
     empty.textContent = drop.availablePeerIds().length
@@ -2077,7 +2162,7 @@ function renderDropTransfers() {
       : 'Invite someone to the room to start dropping files.';
     list.append(empty);
   } else {
-    for (const transfer of transfers) list.append(renderDropTransfer(transfer));
+    for (const transferGroup of transferGroups) list.append(renderDropTransfer(transferGroup));
   }
   const incomingOffers = transfers.filter((transfer) => transfer.direction === 'incoming' && transfer.status === 'offered').length;
   const badge = $('#drop-button-badge');
@@ -2086,10 +2171,24 @@ function renderDropTransfers() {
   updateDropAvailability();
 }
 
-function renderDropTransfer(transfer: DropTransferUpdate & { downloadUrl?: string }) {
+function groupDropTransfers(transfers: DropTransferView[]) {
+  const groups = new Map<string, DropTransferView[]>();
+  for (const transfer of transfers) {
+    const groupKey = transfer.direction === 'outgoing'
+      ? `outgoing:${transfer.id}`
+      : dropTransferKey(transfer);
+    const group = groups.get(groupKey) ?? [];
+    group.push(transfer);
+    groups.set(groupKey, group);
+  }
+  return [...groups.values()];
+}
+
+function renderDropTransfer(transfers: DropTransferView[]) {
+  const transfer = transfers[0];
   const article = document.createElement('article');
   article.className = 'drop-transfer';
-  article.dataset.status = transfer.status;
+  article.dataset.status = dropGroupStatus(transfers);
 
   const icon = document.createElement('span');
   icon.className = 'drop-file-icon';
@@ -2108,16 +2207,18 @@ function renderDropTransfer(transfer: DropTransferUpdate & { downloadUrl?: strin
   const detail = document.createElement('div');
   detail.className = 'drop-transfer-detail';
   const peer = document.createElement('span');
-  peer.textContent = `${transfer.direction === 'incoming' ? 'From' : 'To'} ${dropPeerName(transfer.peerId)}`;
+  peer.textContent = transfer.direction === 'incoming'
+    ? `From ${dropPeerName(transfer.peerId)}`
+    : transfers.length === 1 ? `To ${dropPeerName(transfer.peerId)}` : `To ${transfers.length} recipients`;
   const status = document.createElement('span');
-  status.textContent = dropStatusLabel(transfer);
+  status.textContent = dropStatusLabel(transfers);
   detail.append(peer, status);
   main.append(copy, detail);
-  if (['sending', 'receiving', 'completed'].includes(transfer.status)) {
+  if (transfers.some((entry) => ['sending', 'receiving', 'completed'].includes(entry.status))) {
     const progress = document.createElement('div');
     progress.className = 'drop-progress';
     const bar = document.createElement('i');
-    const percent = transfer.size ? Math.min(100, (transfer.transferred / transfer.size) * 100) : 100;
+    const percent = dropGroupPercent(transfers);
     bar.style.setProperty('--drop-progress', `${percent}%`);
     progress.append(bar);
     main.append(progress);
@@ -2137,8 +2238,12 @@ function renderDropTransfer(transfer: DropTransferUpdate & { downloadUrl?: strin
     download.download = transfer.name;
     download.textContent = 'Download';
     actions.append(download);
-  } else if (['waiting', 'sending', 'receiving'].includes(transfer.status)) {
-    actions.append(dropAction('Cancel', 'drop-cancel', () => drop.cancel(transfer.peerId, transfer.id)));
+  } else if (transfers.some((entry) => ['waiting', 'sending'].includes(entry.status))) {
+    actions.append(dropAction('Cancel', 'drop-cancel', () => {
+      for (const entry of transfers) {
+        if (['waiting', 'sending'].includes(entry.status)) drop.cancel(entry.peerId, entry.id);
+      }
+    }));
   }
 
   article.append(icon, main);
@@ -2155,7 +2260,25 @@ function dropAction(label: string, className: string, action: () => unknown) {
   return button;
 }
 
-function dropStatusLabel(transfer: DropTransferUpdate) {
+function dropStatusLabel(transfers: DropTransferView[]) {
+  const transfer = transfers[0];
+  if (transfers.length > 1 && transfer.direction === 'outgoing') {
+    const count = (status: DropTransferUpdate['status']) => transfers.filter((entry) => entry.status === status).length;
+    const completed = count('completed');
+    const waiting = count('waiting');
+    const declined = count('declined');
+    if (count('sending')) return `${Math.floor(dropGroupPercent(transfers))}% total progress`;
+    if (waiting) {
+      return [completed ? `${completed} sent` : '', `${waiting} awaiting approval`, declined ? `${declined} declined` : '']
+        .filter(Boolean)
+        .join(' · ');
+    }
+    if (completed === transfers.length) return `Sent to ${completed} recipients`;
+    if (completed) return `Sent to ${completed} of ${transfers.length}`;
+    if (declined === transfers.length) return 'Declined by all recipients';
+    if (count('error')) return 'One or more transfers failed';
+    return 'Cancelled';
+  }
   if (transfer.status === 'offered') return 'Needs your approval';
   if (transfer.status === 'waiting') return 'Waiting for approval';
   if (transfer.status === 'sending') return `${dropPercent(transfer)} sent`;
@@ -2164,6 +2287,23 @@ function dropStatusLabel(transfer: DropTransferUpdate) {
   if (transfer.status === 'declined') return 'Declined';
   if (transfer.status === 'cancelled') return 'Cancelled';
   return transfer.error || 'Transfer failed';
+}
+
+function dropGroupStatus(transfers: DropTransferView[]) {
+  if (transfers.some((transfer) => transfer.status === 'sending')) return 'sending';
+  if (transfers.some((transfer) => transfer.status === 'receiving')) return 'receiving';
+  if (transfers.some((transfer) => transfer.status === 'waiting')) return 'waiting';
+  if (transfers.every((transfer) => transfer.status === 'completed')) return 'completed';
+  if (transfers.some((transfer) => transfer.status === 'error')) return 'error';
+  if (transfers.every((transfer) => transfer.status === 'declined')) return 'declined';
+  if (transfers.every((transfer) => transfer.status === 'cancelled')) return 'cancelled';
+  return transfers.some((transfer) => transfer.status === 'completed') ? 'completed' : transfers[0].status;
+}
+
+function dropGroupPercent(transfers: DropTransferView[]) {
+  const total = transfers.reduce((sum, transfer) => sum + transfer.size, 0);
+  const transferred = transfers.reduce((sum, transfer) => sum + transfer.transferred, 0);
+  return total ? Math.min(100, (transferred / total) * 100) : 100;
 }
 
 function dropPercent(transfer: DropTransferUpdate) {
@@ -2199,6 +2339,7 @@ function clearDropTransfers() {
     if (transfer.downloadUrl) URL.revokeObjectURL(transfer.downloadUrl);
   }
   dropTransfers.clear();
+  room.querySelectorAll('[data-chat-file-request]').forEach((card) => card.remove());
   renderDropTransfers();
 }
 
