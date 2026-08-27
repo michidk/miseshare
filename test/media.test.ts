@@ -81,6 +81,26 @@ test('broadcaster drops a backpressured frame and requests a repair keyframe', (
   assert.equal((connection.sent[1] as TextFrameChunkPacket).type, 'text-frame-chunk');
 });
 
+test('receiver requests a bootstrap keyframe when it attaches to an open channel', () => {
+  const connection = new FakeConnection();
+
+  new TextStreamReceiver(new RecordingRenderer(), connection, () => {});
+
+  assert.deepEqual(connection.sent, [{ type: 'text-keyframe-request', afterFrameId: 0 }]);
+});
+
+test('receiver requests a bootstrap keyframe when its channel opens later', () => {
+  const connection = new FakeConnection();
+  connection.open = false;
+  new TextStreamReceiver(new RecordingRenderer(), connection, () => {});
+
+  assert.deepEqual(connection.sent, []);
+  connection.open = true;
+  connection.emit('open');
+
+  assert.deepEqual(connection.sent, [{ type: 'text-keyframe-request', afterFrameId: 0 }]);
+});
+
 test('receiver ignores deltas after a frame gap until a keyframe repairs the stream', async () => {
   const connection = new FakeConnection();
   const renderer = new RecordingRenderer();
@@ -92,7 +112,10 @@ test('receiver ignores deltas after a frame gap until a keyframe repairs the str
   sendStart(connection, 3, false);
 
   assert.deepEqual(renderer.frames.map(({ frameId }) => frameId), [1]);
-  assert.deepEqual(connection.sent, [{ type: 'text-keyframe-request', afterFrameId: 3 }]);
+  assert.deepEqual(connection.sent, [
+    { type: 'text-keyframe-request', afterFrameId: 0 },
+    { type: 'text-keyframe-request', afterFrameId: 3 },
+  ]);
 
   sendFrame(connection, 4, true);
   await settle();
@@ -136,7 +159,7 @@ test('receiver joining mid-stream repairs instead of closing the peer', async ()
 
   assert.equal(connection.closeCount, 0);
   assert.deepEqual(renderer.frames, []);
-  assert.deepEqual(connection.sent, [{ type: 'text-keyframe-request', afterFrameId: 10 }]);
+  assert.deepEqual(connection.sent, [{ type: 'text-keyframe-request', afterFrameId: 0 }]);
 
   sendFrame(connection, 14, true);
   await settle();

@@ -138,6 +138,7 @@ interface PendingFrame extends TextFrameStartPacket {
 export class TextStreamReceiver {
   private readonly renderer: MediaRenderer<RenderableTextFrame>;
   private readonly pending = new Map<number, PendingFrame>();
+  private readonly openBound = () => this.requestKeyframe();
   private readonly receiveBound = (value: unknown) => this.receive(value);
   private readonly closeBound = () => this.close();
   private renderQueue = Promise.resolve();
@@ -155,9 +156,11 @@ export class TextStreamReceiver {
     private readonly onFirstFrame: () => void,
   ) {
     this.renderer = isFrameRenderer(target) ? target : new LosslessTextRenderer(target);
+    connection.on('open', this.openBound);
     connection.on('message', this.receiveBound);
     connection.on('close', this.closeBound);
     connection.on('error', this.closeBound);
+    this.requestKeyframe();
   }
 
   close() {
@@ -165,6 +168,7 @@ export class TextStreamReceiver {
     this.closed = true;
     this.generation += 1;
     this.pending.clear();
+    this.connection.off('open', this.openBound);
     this.connection.off('message', this.receiveBound);
     this.connection.off('close', this.closeBound);
     this.connection.off('error', this.closeBound);
