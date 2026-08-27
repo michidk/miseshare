@@ -542,6 +542,7 @@ function handleRoomMessage(value: unknown) {
     case 'participant-joined':
       rememberParticipant(message.participant);
       renderParticipantPresence();
+      mesh?.connect(message.participant.id);
       if (localPresentation) connectLocalStreamTo(message.participant.id);
       break;
     case 'participant-left':

@@ -10,6 +10,7 @@ interface PeerState extends RtcPeerChannels {
   ignoreOffer: boolean;
   settingRemoteAnswer: boolean;
   pendingCandidates: RTCIceCandidateInit[];
+  tracksReady: Promise<void>;
   recoveryAttempts: number;
   recoveryTimer?: ReturnType<typeof setTimeout>;
 }
@@ -30,7 +31,7 @@ export class RtcMesh {
 
   connect(peerId: string) {
     const peer = this.ensurePeer(peerId);
-    void this.negotiate(peer);
+    void peer.tracksReady.then(() => this.negotiate(peer));
     return peer;
   }
 
@@ -90,6 +91,7 @@ export class RtcMesh {
         peer.ignoreOffer = !polite && offerCollision;
         if (peer.ignoreOffer) return;
         peer.settingRemoteAnswer = description.type === 'answer';
+        await peer.tracksReady;
         await peer.connection.setRemoteDescription(description);
         peer.settingRemoteAnswer = false;
         if (description.type === 'offer') {
@@ -160,8 +162,8 @@ export class RtcMesh {
     const control = new NativeRtcChannel(peerId, connection.createDataChannel('control', { negotiated: true, id: 0, ordered: true }));
     const screen = new NativeRtcChannel(peerId, connection.createDataChannel('screen', { negotiated: true, id: 1, ordered: true }));
     const diagnostics = new NativeRtcChannel(peerId, connection.createDataChannel('diagnostics', { negotiated: true, id: 2, ordered: true }));
-    const audioSender = connection.addTransceiver('audio', { direction: 'sendrecv' }).sender;
-    const videoSender = connection.addTransceiver('video', { direction: 'sendrecv' }).sender;
+    const audioSender = connection.addTransceiver(this.audioTrack ?? 'audio', { direction: 'sendrecv' }).sender;
+    const videoSender = connection.addTransceiver(this.videoTrack ?? 'video', { direction: 'sendrecv' }).sender;
     const peer: PeerState = {
       peerId,
       connection,
@@ -174,6 +176,7 @@ export class RtcMesh {
       ignoreOffer: false,
       settingRemoteAnswer: false,
       pendingCandidates: [],
+      tracksReady: Promise.resolve(),
       recoveryAttempts: 0,
     };
     this.peers.set(peerId, peer);
@@ -200,8 +203,7 @@ export class RtcMesh {
         this.closePeer(peerId);
       }
     });
-    if (this.audioTrack) void audioSender.replaceTrack(this.audioTrack);
-    if (this.videoTrack) void videoSender.replaceTrack(this.videoTrack).then(() => this.applyVideoBitrate(videoSender));
+    peer.tracksReady = this.videoTrack ? this.applyVideoBitrate(videoSender) : Promise.resolve();
     return peer;
   }
 
@@ -217,6 +219,7 @@ export class RtcMesh {
     if (this.closed || peer.makingOffer || peer.connection.signalingState !== 'stable') return;
     try {
       peer.makingOffer = true;
+      await peer.tracksReady;
       await peer.connection.setLocalDescription();
       await this.send(peer.peerId, 'description', peer.connection.localDescription?.toJSON());
     } catch (error) {

@@ -63,6 +63,38 @@ test('lossless text mode renders a multi-chunk frame pixel-exactly', async ({ br
   await viewerContext.close();
 });
 
+test('a participant who joins after native sharing started receives the stream', async ({ browser, page }) => {
+  await page.goto('/');
+  await page.locator('#share-button').click();
+  await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
+
+  await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 360;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas rendering is unavailable.');
+    let frame = 0;
+    window.setInterval(() => {
+      context.fillStyle = `hsl(${frame++ % 360} 80% 50%)`;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+    }, 50);
+    const stream = canvas.captureStream(20);
+    Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', { configurable: true, value: async () => stream });
+    (window as unknown as { nativeTestStream: MediaStream }).nativeTestStream = stream;
+  });
+  await page.locator('#stream-button').click();
+  await expect(page.locator('.stream-card')).not.toHaveClass(/connecting/);
+
+  const viewerContext = await browser.newContext();
+  const viewer = await viewerContext.newPage();
+  await viewer.goto(page.url());
+  const remoteCard = viewer.locator('.stream-card');
+  await expect(remoteCard).not.toHaveClass(/connecting/, { timeout: 30_000 });
+  await expect(remoteCard.locator('video')).toHaveJSProperty('videoWidth', 640);
+  await viewerContext.close();
+});
+
 test('landing page does not overflow a mobile viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
