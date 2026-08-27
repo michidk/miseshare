@@ -24,6 +24,7 @@ test('a participant can accept and download a peer-to-peer file drop', async ({ 
   await page.goto('/');
   await page.locator('#share-button').click();
   await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
+  await expect(page.locator('#drop-button')).toBeDisabled();
 
   const viewerContext = await browser.newContext();
   const viewer = await viewerContext.newPage();
@@ -35,6 +36,7 @@ test('a participant can accept and download a peer-to-peer file drop', async ({ 
   await secondViewer.goto(page.url());
   await expect(secondViewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
 
+  await expect(page.locator('#drop-button')).toBeEnabled({ timeout: 20_000 });
   await page.locator('#drop-button').click();
   await expect(page.locator('#drop-peer-count')).toHaveText('2 connected peers', { timeout: 20_000 });
   await page.locator('#drop-file-input').setInputFiles({

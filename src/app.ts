@@ -2027,7 +2027,8 @@ function openDropDialog() {
 function updateDropAvailability() {
   const connected = drop.availablePeerIds().length;
   const button = $<HTMLButtonElement>('#drop-button');
-  button.disabled = session.connection !== 'live' || session.ended;
+  button.disabled = session.connection !== 'live' || session.ended || connected === 0;
+  button.title = connected ? 'Transfer files' : 'Another participant must join before you can transfer files.';
   $('#drop-peer-count').textContent = connected
     ? `${connected} connected ${connected === 1 ? 'peer' : 'peers'}`
     : 'No peers connected';
