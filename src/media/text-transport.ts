@@ -23,7 +23,16 @@ export const TEXT_TRANSPORT_LIMITS = {
 interface BroadcasterConnection {
   connection: RtcChannel;
   repairPending: boolean;
+  transfer?: FrameTransfer;
+  nextTransfer?: FrameTransfer;
+  pumpScheduled: boolean;
   detach(): void;
+}
+
+interface FrameTransfer {
+  packets: unknown[];
+  packetIndex: number;
+  keyframe: boolean;
 }
 
 export class TextStreamBroadcaster {
@@ -32,7 +41,11 @@ export class TextStreamBroadcaster {
   constructor(private readonly onKeyframeRequested: () => void = () => {}) {}
 
   add(connection: RtcChannel) {
-    const opened = () => this.onKeyframeRequested();
+    const opened = () => {
+      this.requestRepair(entry);
+      this.pump(entry);
+    };
+    const drain = () => this.pump(entry);
     const remove = () => {
       const current = this.connections.get(connection.peerId);
       if (current?.connection === connection) {
@@ -42,14 +55,15 @@ export class TextStreamBroadcaster {
     };
     const receive = (value: unknown) => {
       if (!isKeyframeRequest(value)) return;
-      entry.repairPending = false;
-      this.onKeyframeRequested();
+      this.requestRepair(entry);
     };
     const entry: BroadcasterConnection = {
       connection,
       repairPending: false,
+      pumpScheduled: false,
       detach: () => {
         connection.off('open', opened);
+        connection.off('drain', drain);
         connection.off('message', receive);
         connection.off('close', remove);
         connection.off('error', remove);
@@ -57,6 +71,7 @@ export class TextStreamBroadcaster {
     };
     this.connections.set(connection.peerId, entry);
     connection.on('open', opened);
+    connection.on('drain', drain);
     connection.on('message', receive);
     connection.on('close', remove);
     connection.on('error', remove);
@@ -69,6 +84,10 @@ export class TextStreamBroadcaster {
   remove(peerId: string, closeConnection = true) {
     const entry = this.connections.get(peerId);
     this.connections.delete(peerId);
+    if (entry) {
+      entry.transfer = undefined;
+      entry.nextTransfer = undefined;
+    }
     entry?.detach();
     if (closeConnection) entry?.connection.close();
   }
@@ -88,35 +107,36 @@ export class TextStreamBroadcaster {
       chunkCount: chunks.length,
     };
 
+    const packets: unknown[] = [start];
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
+      packets.push({
+        type: 'text-frame-chunk',
+        frameId: frame.frameId,
+        chunkIndex,
+        data: chunks[chunkIndex],
+      } satisfies TextFrameChunkPacket);
+    }
+
     for (const entry of this.connections.values()) {
-      const { connection } = entry;
-      if (!connection.open || isBackpressured(connection)) {
-        this.requestRepair(entry);
+      const transfer = { packets, packetIndex: 0, keyframe: frame.keyframe } satisfies FrameTransfer;
+      if (entry.transfer) {
+        if (frame.keyframe) entry.nextTransfer = transfer;
+        else this.requestRepair(entry);
         continue;
       }
       if (entry.repairPending && !frame.keyframe) {
         this.onKeyframeRequested();
         continue;
       }
-      try {
-        connection.send(start);
-        for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 1) {
-          connection.send({
-            type: 'text-frame-chunk',
-            frameId: frame.frameId,
-            chunkIndex,
-            data: chunks[chunkIndex],
-          } satisfies TextFrameChunkPacket);
-        }
-        entry.repairPending = false;
-      } catch {
-        this.requestRepair(entry);
-      }
+      entry.transfer = transfer;
+      this.pump(entry);
     }
   }
 
   close(closeConnections = true) {
     for (const entry of this.connections.values()) {
+      entry.transfer = undefined;
+      entry.nextTransfer = undefined;
       entry.detach();
       if (closeConnections) entry.connection.close();
     }
@@ -128,10 +148,38 @@ export class TextStreamBroadcaster {
     entry.repairPending = true;
     this.onKeyframeRequested();
   }
+
+  private pump(entry: BroadcasterConnection) {
+    entry.pumpScheduled = false;
+    const { connection } = entry;
+    if (!connection.open || !entry.transfer || isBackpressured(connection)) return;
+    let sent = 0;
+    try {
+      while (entry.transfer && sent < TEXT_TRANSPORT_LIMITS.queuedMessages && !isBackpressured(connection)) {
+        const transfer = entry.transfer;
+        connection.send(transfer.packets[transfer.packetIndex]);
+        transfer.packetIndex += 1;
+        sent += 1;
+        if (transfer.packetIndex < transfer.packets.length) continue;
+        if (transfer.keyframe) entry.repairPending = false;
+        entry.transfer = entry.nextTransfer;
+        entry.nextTransfer = undefined;
+      }
+    } catch {
+      entry.transfer = undefined;
+      entry.nextTransfer = undefined;
+      this.requestRepair(entry);
+      return;
+    }
+    if (!entry.transfer || isBackpressured(connection) || entry.pumpScheduled) return;
+    entry.pumpScheduled = true;
+    setTimeout(() => this.pump(entry), 0);
+  }
 }
 
 interface PendingFrame extends TextFrameStartPacket {
   chunks: Array<Uint8Array | undefined>;
+  receivedChunks: number;
   receivedBytes: number;
 }
 
@@ -201,7 +249,12 @@ export class TextStreamReceiver {
       this.awaitingKeyframe = false;
       this.repairRequested = false;
     }
-    this.pending.set(packet.frameId, { ...packet, chunks: Array(packet.chunkCount), receivedBytes: 0 });
+    this.pending.set(packet.frameId, {
+      ...packet,
+      chunks: Array(packet.chunkCount),
+      receivedChunks: 0,
+      receivedBytes: 0,
+    });
   }
 
   private addChunk(packet: TextFrameChunkPacket) {
@@ -228,8 +281,9 @@ export class TextStreamReceiver {
       return;
     }
     frame.chunks[packet.chunkIndex] = chunk;
+    frame.receivedChunks += 1;
     frame.receivedBytes += chunk.byteLength;
-    if (frame.chunks.some((candidate) => !candidate)) return;
+    if (frame.receivedChunks < frame.chunkCount) return;
     this.pending.delete(packet.frameId);
     if (frame.receivedBytes !== frame.compressedBytes) {
       this.protocolViolation();

@@ -19,6 +19,7 @@ class FakeConnection implements RtcChannel {
   readonly listeners = new Map<string, Set<Listener>>();
   open = true;
   bufferedAmount = 0;
+  trackBufferedAmount = false;
   closeCount = 0;
 
   constructor(readonly peerId = 'peer-1') {}
@@ -37,6 +38,9 @@ class FakeConnection implements RtcChannel {
 
   send(value: unknown) {
     this.sent.push(value);
+    if (!this.trackBufferedAmount || !value || typeof value !== 'object' || !('data' in value)) return;
+    const data = (value as { data?: unknown }).data;
+    if (data instanceof Uint8Array || data instanceof ArrayBuffer) this.bufferedAmount += data.byteLength;
   }
 
   close() {
@@ -63,22 +67,41 @@ class RecordingRenderer implements MediaRenderer<RenderableTextFrame> {
   }
 }
 
-test('broadcaster drops a backpressured frame and requests a repair keyframe', () => {
+test('broadcaster pauses a backpressured frame until the channel drains', () => {
   const connection = new FakeConnection();
   connection.bufferedAmount = TEXT_TRANSPORT_LIMITS.bufferedBytes + 1;
   let keyframeRequests = 0;
   const broadcaster = new TextStreamBroadcaster(() => { keyframeRequests += 1; });
   broadcaster.add(connection);
 
-  broadcaster.send(encodedFrame(1, false));
+  broadcaster.send(encodedFrame(1, true));
 
-  assert.equal(keyframeRequests, 1);
+  assert.equal(keyframeRequests, 0);
   assert.deepEqual(connection.sent, []);
 
   connection.bufferedAmount = 0;
-  broadcaster.send(encodedFrame(2, true));
+  connection.emit('drain');
   assert.equal((connection.sent[0] as TextFrameStartPacket).type, 'text-frame-start');
   assert.equal((connection.sent[1] as TextFrameChunkPacket).type, 'text-frame-chunk');
+});
+
+test('broadcaster bounds queued bytes and resumes a large frame after drain', () => {
+  const connection = new FakeConnection();
+  connection.trackBufferedAmount = true;
+  const broadcaster = new TextStreamBroadcaster();
+  broadcaster.add(connection);
+  const chunkCount = TEXT_TRANSPORT_LIMITS.queuedMessages + 10;
+  const frame = encodedFrame(1, true, new Uint8Array(TEXT_TRANSPORT_LIMITS.chunkBytes * chunkCount));
+
+  broadcaster.send(frame);
+
+  assert.ok(connection.sent.length > 1);
+  assert.ok(connection.sent.length < chunkCount + 1);
+  assert.ok(connection.bufferedAmount <= TEXT_TRANSPORT_LIMITS.bufferedBytes + TEXT_TRANSPORT_LIMITS.chunkBytes);
+
+  connection.bufferedAmount = 0;
+  connection.emit('drain');
+  assert.equal(connection.sent.length, chunkCount + 1);
 });
 
 test('receiver requests a bootstrap keyframe when it attaches to an open channel', () => {
@@ -146,6 +169,32 @@ test('receiver serializes asynchronous frame rendering', async () => {
   assert.deepEqual(started, [1, 2]);
 });
 
+test('receiver waits for every chunk of a multi-chunk frame before rendering', async () => {
+  const connection = new FakeConnection();
+  const renderer = new RecordingRenderer();
+  new TextStreamReceiver(renderer, connection, () => {});
+  const compressedBytes = TEXT_TRANSPORT_LIMITS.chunkBytes + 3;
+  sendStart(connection, 1, true, compressedBytes);
+
+  connection.receive({
+    type: 'text-frame-chunk',
+    frameId: 1,
+    chunkIndex: 0,
+    data: new Uint8Array(TEXT_TRANSPORT_LIMITS.chunkBytes),
+  } satisfies TextFrameChunkPacket);
+  await settle();
+  assert.equal(renderer.frames.length, 0);
+
+  connection.receive({
+    type: 'text-frame-chunk',
+    frameId: 1,
+    chunkIndex: 1,
+    data: new Uint8Array(3),
+  } satisfies TextFrameChunkPacket);
+  await settle();
+  assert.deepEqual(renderer.frames.map(({ frameId, data }) => [frameId, data.byteLength]), [[1, compressedBytes]]);
+});
+
 test('receiver joining mid-stream repairs instead of closing the peer', async () => {
   const connection = new FakeConnection();
   const renderer = new RecordingRenderer();
@@ -200,8 +249,8 @@ test('receiver closes a peer after repeated oversized packets', () => {
   assert.deepEqual(renderer.frames, []);
 });
 
-function encodedFrame(frameId: number, keyframe: boolean): EncodedTextFrame {
-  return { frameId, width: 1, height: 1, keyframe, tileCount: 1, rawBytes: 1, data: new Uint8Array([1, 2, 3]) };
+function encodedFrame(frameId: number, keyframe: boolean, data = new Uint8Array([1, 2, 3])): EncodedTextFrame {
+  return { frameId, width: 1, height: 1, keyframe, tileCount: 1, rawBytes: 1, data };
 }
 
 function sendStart(connection: FakeConnection, frameId: number, keyframe: boolean, compressedBytes = 3) {
@@ -214,7 +263,7 @@ function sendStart(connection: FakeConnection, frameId: number, keyframe: boolea
     tileCount: 1,
     rawBytes: 1,
     compressedBytes,
-    chunkCount: 1,
+    chunkCount: Math.ceil(compressedBytes / TEXT_TRANSPORT_LIMITS.chunkBytes),
   } satisfies TextFrameStartPacket);
 }
 

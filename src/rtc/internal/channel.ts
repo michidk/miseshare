@@ -8,7 +8,9 @@ export class NativeRtcChannel implements RtcChannel {
 
   constructor(readonly peerId: string, private readonly channel: RTCDataChannel) {
     channel.binaryType = 'arraybuffer';
+    channel.bufferedAmountLowThreshold = 1024 * 1024;
     channel.addEventListener('open', () => this.emit('open'));
+    channel.addEventListener('bufferedamountlow', () => this.emit('drain'));
     channel.addEventListener('close', () => this.emit('close'));
     channel.addEventListener('error', () => this.emit('error'));
     channel.addEventListener('message', (event) => {

@@ -1,4 +1,4 @@
-export type ChannelEvent = 'open' | 'message' | 'close' | 'error';
+export type ChannelEvent = 'open' | 'message' | 'drain' | 'close' | 'error';
 
 export interface RtcChannel {
   readonly peerId: string;
