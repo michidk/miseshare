@@ -716,6 +716,7 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 .stream-control-copy strong { color: #55575e; font-size: 10px; }
 .stream-controls .audio-option-compact { flex: 0 0 auto; background: rgba(255,255,255,.62); }
 .stream-controls .audio-control-button { min-height: 38px; padding: 0 11px; background: rgba(255,255,255,.68); }
+.test-stream-button { min-height: 38px; padding: 0 11px; border-style: dashed; color: #59627d; background: rgba(255,255,255,.68); font-size: 9px; }
 .stream-button { min-height: 40px; padding: 0 14px; font-size: 10px; }
 .stream-button.stop-stream { color: #d94545; border: 1px solid rgba(239,78,78,.2); background: white; box-shadow: none; }
 

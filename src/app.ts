@@ -114,6 +114,7 @@ const joinPasswordInput = $<HTMLInputElement>('#join-password');
 const joinPasswordError = $('#join-password-error');
 const appBaseUrl = new URL(document.baseURI);
 const appBasePath = appBaseUrl.pathname.replace(/\/$/, '');
+const streamTestMode = new URLSearchParams(location.search).get('streamTest') === '1';
 const chatEmoteRenderer = buildChatEmoteRenderer(appPath('emotes'));
 const roomNotifications = buildRoomNotificationController($('#notification-toaster'));
 
@@ -173,6 +174,7 @@ let signaling: RestSignalingSession | undefined;
 const session = new RoomSession();
 let viewerControl: RtcChannel | undefined;
 let localPresentation: LocalPresentation | undefined;
+let syntheticStreamTimer: number | undefined;
 let shareAudioEnabled = false;
 let currentStreamSettings: RoomStreamSettings = { ...qualityPresets['720p'] };
 let rtcConfig: RTCConfiguration = {
@@ -646,6 +648,47 @@ async function startRoomPresentation() {
   }
 }
 
+async function startSyntheticPresentation() {
+  if (!streamTestMode || localPresentation || session.ended || !signaling?.participantId || !session.beginPresentation()) return;
+  updateRoomUI();
+  setShareAudioControlsDisabled(true);
+  const canvas = document.createElement('canvas');
+  canvas.width = 1280;
+  canvas.height = 720;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    session.finishPresentation();
+    setShareAudioControlsDisabled(false);
+    updateRoomUI();
+    showToast('Synthetic stream rendering is unavailable.', 'error');
+    return;
+  }
+  let frame = 0;
+  const draw = () => {
+    const hue = frame++ % 360;
+    context.fillStyle = `hsl(${hue} 72% 48%)`;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = 'rgba(0, 0, 0, .28)';
+    context.fillRect(80, 245, 1120, 230);
+    context.fillStyle = 'white';
+    context.textAlign = 'center';
+    context.font = '700 72px sans-serif';
+    context.fillText('miseshare test stream', 640, 350);
+    context.font = '36px monospace';
+    context.fillText(`frame ${String(frame).padStart(6, '0')}`, 640, 420);
+  };
+  draw();
+  syntheticStreamTimer = window.setInterval(draw, 50);
+  try {
+    await beginLocalPresentation(canvas.captureStream(20));
+  } catch (error) {
+    session.finishPresentation();
+    disposeLocalPresentation();
+    updateRoomUI();
+    showToast(errorMessage(error, 'Could not start the synthetic stream.'), 'error');
+  }
+}
+
 async function beginLocalPresentation(stream: MediaStream) {
   if (!signaling?.participantId || !mesh) throw new Error('The room connection is not ready.');
   try {
@@ -782,6 +825,8 @@ function disposeLocalPresentation() {
   const presentation = localPresentation;
   localPresentation = undefined;
   presentation?.stop();
+  if (syntheticStreamTimer !== undefined) window.clearInterval(syntheticStreamTimer);
+  syntheticStreamTimer = undefined;
   setShareAudioControlsDisabled(false);
 }
 
@@ -983,6 +1028,8 @@ function updateRoomUI() {
   streamButton.classList.toggle('stop-stream', sharing);
   const streamButtonLabel = streamButton.querySelector('span');
   if (streamButtonLabel) streamButtonLabel.textContent = sharing ? 'Stop sharing' : session.presentationPending ? 'Opening picker…' : 'Start sharing';
+  const testStreamButton = $<HTMLButtonElement>('#test-stream-button');
+  testStreamButton.disabled = sharing || session.presentationPending || session.ended || (!session.isHost && !viewerControl?.open);
   $('#your-stream-status').textContent = sharing
     ? `${currentStreamSettings.buttonLabel} · ${localAudioTracks().some((track) => track.enabled) ? 'audio on' : 'audio off'}`
     : session.presentationPending ? 'Starting…' : 'Not sharing';
@@ -2455,6 +2502,7 @@ function errorMessage(error: unknown, fallback: string) {
 
 $('#share-button').addEventListener('click', startRoom);
 $('#stream-button').addEventListener('click', () => localPresentation ? stopLocalPresentation() : startRoomPresentation());
+$('#test-stream-button').addEventListener('click', () => void startSyntheticPresentation());
 $('#local-audio-button').addEventListener('click', toggleLocalAudio);
 $('#leave-room-button').addEventListener('click', () => void leaveRoom());
 window.addEventListener('pagehide', handlePageDeparture);
@@ -2508,6 +2556,8 @@ $('#chat-expand-button').addEventListener('click', () => setChatCollapsed(false)
 document.addEventListener('pointerdown', prepareChatAudio, { once: true, passive: true });
 document.addEventListener('keydown', prepareChatAudio, { once: true });
 setInterval(updateElapsedTimes, 30_000);
+
+if (streamTestMode) $('#test-stream-button').hidden = false;
 
 document.querySelectorAll<HTMLElement>('[data-quality-trigger]').forEach((button) => {
   button.addEventListener('click', () => toggleQualityMenu(button));
