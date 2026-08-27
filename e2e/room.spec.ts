@@ -113,7 +113,7 @@ test('lossless text mode renders a multi-chunk frame pixel-exactly', async ({ br
 });
 
 test('a participant who joins after native sharing started receives the stream', async ({ browser, page }) => {
-  await page.goto('/?streamTest=1');
+  await page.goto('/?test');
   await page.locator('#share-button').click();
   await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
   await expect(page.locator('#test-stream-button')).toBeVisible();
@@ -123,6 +123,23 @@ test('a participant who joins after native sharing started receives the stream',
   const viewerContext = await browser.newContext();
   const viewer = await viewerContext.newPage();
   await viewer.goto(page.url());
+  const remoteCard = viewer.locator('.stream-card');
+  await expect(remoteCard).not.toHaveClass(/connecting/, { timeout: 30_000 });
+  await expect(remoteCard.locator('video')).toHaveJSProperty('videoWidth', 1280);
+  await viewerContext.close();
+});
+
+test('an existing participant receives a native stream started by the host', async ({ browser, page }) => {
+  await page.goto('/?test');
+  await page.locator('#share-button').click();
+  await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
+
+  const viewerContext = await browser.newContext();
+  const viewer = await viewerContext.newPage();
+  await viewer.goto(page.url());
+  await expect(viewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
+
+  await page.locator('#test-stream-button').click();
   const remoteCard = viewer.locator('.stream-card');
   await expect(remoteCard).not.toHaveClass(/connecting/, { timeout: 30_000 });
   await expect(remoteCard.locator('video')).toHaveJSProperty('videoWidth', 1280);

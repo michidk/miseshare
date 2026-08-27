@@ -134,6 +134,7 @@ export class RtcMesh {
     await Promise.all([...this.peers.values()].map(async (peer) => {
       await peer.videoSender.replaceTrack(track);
       await this.applyVideoBitrate(peer.videoSender);
+      await this.negotiate(peer);
     }));
   }
 

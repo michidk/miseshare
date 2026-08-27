@@ -114,7 +114,7 @@ const joinPasswordInput = $<HTMLInputElement>('#join-password');
 const joinPasswordError = $('#join-password-error');
 const appBaseUrl = new URL(document.baseURI);
 const appBasePath = appBaseUrl.pathname.replace(/\/$/, '');
-const streamTestMode = new URLSearchParams(location.search).get('streamTest') === '1';
+const streamTestMode = new URLSearchParams(location.search).has('test');
 const chatEmoteRenderer = buildChatEmoteRenderer(appPath('emotes'));
 const roomNotifications = buildRoomNotificationController($('#notification-toaster'));
 
