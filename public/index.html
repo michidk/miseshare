@@ -227,6 +227,16 @@
       <p class="room-privacy"><svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2M6 10h12v10H6z"/></svg> Streams and file transfers are encrypted between browsers; file contents never pass through the server.</p>
     </main>
 
+    <section id="room-status" class="room-status" aria-live="assertive" aria-labelledby="room-status-title" hidden>
+      <div class="room-status-card">
+        <span id="room-status-spinner" class="room-status-spinner" aria-hidden="true"></span>
+        <span id="room-status-kicker" class="room-status-kicker">Connecting</span>
+        <h2 id="room-status-title">Connecting to the room…</h2>
+        <p id="room-status-message">Hang tight while we establish a secure peer-to-peer connection.</p>
+        <a id="room-status-home" class="button button-primary room-status-home" href="./" hidden>Back to home</a>
+      </div>
+    </section>
+
     <div id="quality-menu" class="quality-menu" hidden>
       <div class="quality-menu-heading"><strong>Stream quality</strong><span>Applied live</span></div>
       <button type="button" data-quality="text"><span><strong>Text</strong><small>Native resolution · 6 fps · pixel-perfect</small></span><i></i></button>

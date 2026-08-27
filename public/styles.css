@@ -836,6 +836,17 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 .password-cancel:hover { background: #f0eee8; box-shadow: none; }
 @keyframes password-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
+.room-status { position: fixed; z-index: 120; inset: 0; padding: 24px; display: grid; place-items: center; background: rgba(245,242,235,.48); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.room-status-card { width: min(440px, 100%); padding: 38px; text-align: center; border: 1px solid rgba(23,25,31,.11); border-radius: 20px; background: rgba(255,254,250,.94); box-shadow: 0 28px 80px rgba(43,39,30,.2); animation: room-status-in .22s ease-out; }
+.room-status-spinner { width: 34px; height: 34px; margin: 0 auto 22px; display: block; border: 3px solid rgba(49,88,245,.18); border-top-color: var(--blue); border-radius: 50%; animation: spin .8s linear infinite; }
+.room-status-kicker { display: block; margin-bottom: 7px; color: var(--blue); font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.room-status h2 { margin: 0 0 10px; font-family: var(--font-display); font-size: clamp(22px, 4vw, 28px); letter-spacing: -.045em; }
+.room-status p { margin: 0 auto; max-width: 340px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.room-status-home { width: fit-content; min-width: 150px; margin: 24px auto 0; text-decoration: none; }
+.room-status[data-mode="ended"] .room-status-card { border-color: rgba(239,78,78,.18); }
+.room-status[data-mode="ended"] .room-status-kicker { color: var(--red); }
+@keyframes room-status-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
 .toast { position: fixed; z-index: 100; left: 50%; bottom: 25px; padding: 12px 17px; border-radius: 10px; color: white; background: #202229; box-shadow: 0 10px 35px rgba(0,0,0,.2); font-size: 12px; font-weight: 650; opacity: 0; pointer-events: none; transform: translate(-50%, 15px); transition: opacity .2s, transform .2s; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast[data-tone="error"] { background: #c43f3f; }

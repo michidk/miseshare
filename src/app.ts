@@ -108,6 +108,7 @@ const streamsEmpty = $('#streams-empty');
 const qualityMenu = $('#quality-menu');
 let qualityMenuAnchor: HTMLElement | null = null;
 const toast = $('#toast');
+const roomStatus = $('#room-status');
 const joinPasswordDialog = $<HTMLDialogElement>('#join-password-dialog');
 const joinPasswordInput = $<HTMLInputElement>('#join-password');
 const joinPasswordError = $('#join-password-error');
@@ -421,6 +422,7 @@ function prepareRoomShell() {
   $('#room-title').textContent = `Room ${session.roomId}`;
   $('#leave-room-button span').textContent = session.isHost ? 'Close room' : 'Leave room';
   setScreen('room');
+  syncRoomStatus();
   updateParticipantCount(session.isHost ? 1 : 0);
   updateRoomUI();
 }
@@ -974,6 +976,7 @@ function updateStreamGrid() {
 }
 
 function updateRoomUI() {
+  syncRoomStatus();
   const sharing = Boolean(localPresentation);
   const streamButton = $('#stream-button');
   streamButton.disabled = session.ended || session.presentationPending || (!session.isHost && !viewerControl?.open);
@@ -992,6 +995,21 @@ function updateRoomUI() {
   const label = audioButton.querySelector('span');
   if (label) label.textContent = audioEnabled ? 'Stop audio' : 'Resume audio';
   updateDropAvailability();
+}
+
+function syncRoomStatus(message = '') {
+  const connecting = session.connection === 'connecting';
+  const ended = session.connection === 'ended';
+  roomStatus.hidden = !connecting && !ended;
+  if (!connecting && !ended) return;
+  roomStatus.dataset.mode = ended ? 'ended' : 'connecting';
+  $('#room-status-spinner').hidden = ended;
+  $('#room-status-home').hidden = !ended;
+  $('#room-status-kicker').textContent = ended ? 'Disconnected' : 'Connecting';
+  $('#room-status-title').textContent = ended ? 'You’re no longer connected' : 'Connecting to the room…';
+  $('#room-status-message').textContent = message || (ended
+    ? 'This room connection has ended.'
+    : 'Hang tight while we establish a secure peer-to-peer connection.');
 }
 
 function updateParticipantCount(count: number) {
@@ -2350,7 +2368,7 @@ function endViewer(message: string) {
   disposeConnections();
   setChatEnabled(false);
   $('#stream-button').disabled = true;
-  showToast(message, 'error');
+  syncRoomStatus(message);
 }
 
 async function leaveRoom() {
