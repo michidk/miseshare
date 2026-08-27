@@ -78,6 +78,22 @@ export class RestSignalingSession {
     }
   }
 
+  depart() {
+    const pathname = this.participant.isHost
+      ? `/rooms/${this.roomId}`
+      : `/rooms/${this.roomId}/participants/me`;
+    void fetch(`${this.apiBase}${pathname}`, {
+      method: 'DELETE',
+      keepalive: true,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.participantToken}`,
+        'X-Participant-Id': this.participantId,
+      },
+    }).catch(() => {});
+    this.stop();
+  }
+
   stop() {
     this.polling = false;
     this.abortController.abort();
