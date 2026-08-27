@@ -98,6 +98,11 @@ export class RoomService {
     if (!await this.store.leaveRoom(roomId, participantId, tokenHash(token))) throw unavailable();
   }
 
+  async kickParticipant(roomId: string, hostId: string, token: string, participantId: string) {
+    if (!validParticipantId(participantId) || participantId === hostId
+      || !await this.store.kickParticipant(roomId, hostId, tokenHash(token), participantId)) throw unavailable();
+  }
+
   async closeRoom(roomId: string, participantId: string, token: string) {
     if (!await this.store.closeRoom(roomId, participantId, tokenHash(token))) throw unavailable();
   }

@@ -42,6 +42,7 @@ export type ChatEntry = ChatMessage | ChatActivity;
 export type HostRoomMessage =
   | { type: 'room-full' }
   | { type: 'room-closed' }
+  | { type: 'kicked' }
   | { type: 'accepted'; name: string; hostId: string }
   | { type: 'chat-history'; messages: ChatEntry[] }
   | ChatEntry

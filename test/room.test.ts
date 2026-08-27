@@ -48,6 +48,10 @@ test('host protocol carries the authoritative participant names', () => {
   });
 });
 
+test('host protocol accepts a kicked notification', () => {
+  assert.deepEqual(parseHostRoomMessage({ type: 'kicked' }, 'host-room'), { type: 'kicked' });
+});
+
 const settings = {
   codec: 'text-lossless-v1',
   frameRate: 6,

@@ -23,6 +23,7 @@ export function parseHostRoomMessage(value: unknown, hostId: string): HostRoomMe
   switch (message.type) {
     case 'room-full':
     case 'room-closed':
+    case 'kicked':
       return { type: message.type };
     case 'accepted': {
       const name = boundedString(message.name, 40);

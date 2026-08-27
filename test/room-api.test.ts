@@ -65,6 +65,32 @@ test('rate limits hash client identities and return a retry interval', async () 
   assert.doesNotMatch(storedKey, /203\.0\.113\.42/);
 });
 
+test('kicking delegates host identity and target participant to the store', async () => {
+  let kicked: Parameters<RoomStore['kickParticipant']> | undefined;
+  const store = {
+    kickParticipant: async (...input: Parameters<RoomStore['kickParticipant']>) => {
+      kicked = input;
+      return true;
+    },
+  } as unknown as RoomStore;
+  const service = new RoomService(store);
+
+  await service.kickParticipant('room-test', 'host-12345', 'secret', 'guest-12345');
+
+  assert.deepEqual(kicked?.slice(0, 2), ['room-test', 'host-12345']);
+  assert.match(kicked?.[2] ?? '', /^[a-f0-9]{64}$/);
+  assert.equal(kicked?.[3], 'guest-12345');
+});
+
+test('a participant cannot kick themselves', async () => {
+  const store = { kickParticipant: async () => true } as unknown as RoomStore;
+  const service = new RoomService(store);
+  await assert.rejects(
+    () => service.kickParticipant('room-test', 'host-12345', 'secret', 'host-12345'),
+    (error) => error instanceof RoomApiError && error.status === 404,
+  );
+});
+
 function storedParticipant(id: string, name: string): StoredParticipant {
   return { id, roomId: 'room-test', name, tokenHash: 'token', isHost: false, lastSeenAt: 0 };
 }

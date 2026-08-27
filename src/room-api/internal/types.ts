@@ -98,6 +98,7 @@ export interface RoomStore {
   authenticate(roomId: string, participantId: string, tokenHash: string, now: number): Promise<StoredParticipant | undefined>;
   heartbeat(roomId: string, participantId: string, tokenHash: string, now: number, roomExpiresAt: number): Promise<boolean>;
   leaveRoom(roomId: string, participantId: string, tokenHash: string): Promise<boolean>;
+  kickParticipant(roomId: string, hostId: string, tokenHash: string, participantId: string): Promise<boolean>;
   closeRoom(roomId: string, participantId: string, tokenHash: string): Promise<boolean>;
   appendSignal(input: {
     roomId: string;

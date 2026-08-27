@@ -149,6 +149,24 @@ export class PostgresRoomStore implements RoomStore {
     return deleted.length === 1;
   }
 
+  async kickParticipant(roomId: string, hostId: string, expectedTokenHash: string, participantId: string) {
+    return this.database.transaction(async (transaction) => {
+      const hostExists = transaction.select({ id: roomParticipants.id }).from(roomParticipants).where(and(
+        eq(roomParticipants.roomId, roomId),
+        eq(roomParticipants.id, hostId),
+        eq(roomParticipants.tokenHash, expectedTokenHash),
+        eq(roomParticipants.isHost, true),
+      ));
+      const deleted = await transaction.delete(roomParticipants).where(and(
+        eq(roomParticipants.roomId, roomId),
+        eq(roomParticipants.id, participantId),
+        eq(roomParticipants.isHost, false),
+        exists(hostExists),
+      )).returning({ id: roomParticipants.id });
+      return deleted.length === 1;
+    });
+  }
+
   async closeRoom(roomId: string, participantId: string, expectedTokenHash: string) {
     const hostExists = this.database.select({ id: roomParticipants.id }).from(roomParticipants).where(and(
       eq(roomParticipants.roomId, rooms.id),

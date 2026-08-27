@@ -497,6 +497,9 @@ function handleRoomMessage(value: unknown) {
     case 'room-closed':
       endViewer('The room was closed by its host.');
       break;
+    case 'kicked':
+      endViewer('The host removed you from the room.');
+      break;
     case 'accepted':
       session.markLive({ viewerName: message.name, hostId: message.hostId });
       setChatEnabled(true);
@@ -1039,12 +1042,18 @@ function renderParticipantPresence() {
       : assignedName ? guestIdentityWithName(participantId, assignedName) : guestIdentity(participantId);
     const name = assignedName || identity.name;
     const label = formatParticipantLabel(name, { isHost, isLocal, isSharing });
-    const avatar = document.createElement('span');
+    const avatar = document.createElement('button');
+    avatar.type = 'button';
     avatar.className = `participant-avatar color-${identity.color}${isHost ? ' host' : ''}${isSharing ? ' sharing' : ''}`;
     avatar.textContent = identity.emoji;
-    avatar.tabIndex = 0;
     avatar.dataset.tooltip = label;
     avatar.setAttribute('aria-label', label);
+    if (session.isHost && !isLocal) {
+      avatar.classList.add('actionable');
+      avatar.setAttribute('aria-haspopup', 'menu');
+      avatar.setAttribute('aria-expanded', 'false');
+      avatar.addEventListener('click', () => toggleParticipantMenu(avatar, participantId, name));
+    }
     container.append(avatar);
   }
   const hidden = participantIds.size - visible.length;
@@ -1058,6 +1067,57 @@ function renderParticipantPresence() {
     container.append(overflow);
   }
   if (!$('#connection-check-panel').hidden) renderConnectivityResults();
+}
+
+function toggleParticipantMenu(anchor: HTMLButtonElement, participantId: string, participantName: string) {
+  const existing = document.querySelector<HTMLElement>('.participant-menu');
+  if (existing?.dataset.participantId === participantId) {
+    closeParticipantMenu();
+    return;
+  }
+  closeParticipantMenu();
+  const menu = document.createElement('div');
+  menu.className = 'participant-menu';
+  menu.dataset.participantId = participantId;
+  menu.setAttribute('role', 'menu');
+  const kickButton = document.createElement('button');
+  kickButton.type = 'button';
+  kickButton.className = 'participant-menu-kick';
+  kickButton.setAttribute('role', 'menuitem');
+  kickButton.textContent = `Kick ${participantName}`;
+  kickButton.addEventListener('click', () => void kickParticipant(participantId, participantName));
+  menu.append(kickButton);
+  anchor.setAttribute('aria-expanded', 'true');
+  anchor.after(menu);
+  kickButton.focus();
+}
+
+function closeParticipantMenu() {
+  const menu = document.querySelector<HTMLElement>('.participant-menu');
+  if (!menu) return;
+  menu.parentElement?.querySelector<HTMLButtonElement>('.participant-avatar[aria-expanded="true"]')?.setAttribute('aria-expanded', 'false');
+  menu.remove();
+}
+
+async function kickParticipant(participantId: string, participantName: string) {
+  const viewer = hostConnections.get(participantId);
+  if (!session.isHost || !viewer || !signaling) return;
+  closeParticipantMenu();
+  try {
+    if (viewer.control.open) viewer.control.send({ type: 'kicked' });
+    const response = await fetch(appPath(`api/rooms/${signaling.roomId}/participants/${encodeURIComponent(participantId)}`), {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${signaling.participantToken}`,
+        'X-Participant-Id': signaling.participantId,
+      },
+    });
+    if (!response.ok) throw new Error('The participant could not be removed.');
+    removeViewer(participantId, viewer.control);
+    showToast(`${participantName} was kicked from the room.`);
+  } catch (error) {
+    showToast(errorMessage(error, 'Could not kick this participant.'), 'error');
+  }
 }
 
 function toggleConnectivityPanel(force?: boolean) {
@@ -1992,6 +2052,15 @@ function disposeConnections() {
   remoteAudioElements.clear();
 }
 
+let departureStarted = false;
+
+function handlePageDeparture(event?: PageTransitionEvent) {
+  if (event?.persisted || departureStarted || !signaling || session.role === 'none') return;
+  departureStarted = true;
+  signaling.depart();
+  mesh?.close();
+}
+
 async function copyText(value: string, confirmation: string) {
   try { await navigator.clipboard.writeText(value); }
   catch {
@@ -2030,6 +2099,8 @@ $('#share-button').addEventListener('click', startRoom);
 $('#stream-button').addEventListener('click', () => localPresentation ? stopLocalPresentation() : startRoomPresentation());
 $('#local-audio-button').addEventListener('click', toggleLocalAudio);
 $('#leave-room-button').addEventListener('click', () => void leaveRoom());
+window.addEventListener('pagehide', handlePageDeparture);
+window.addEventListener('beforeunload', () => handlePageDeparture());
 $('#copy-room-code').addEventListener('click', () => void copyText(session.roomId, 'Room code copied.'));
 $('#copy-invite-button').addEventListener('click', () => void copyText(`${location.origin}${appPath(`room/${session.roomId}`)}`, 'Invite link copied.'));
 $('#connection-check-button').addEventListener('click', () => toggleConnectivityPanel());
@@ -2074,9 +2145,11 @@ document.addEventListener('click', (event) => {
   const target = event.target instanceof Element ? event.target : null;
   if (!target?.closest('[data-quality-trigger]') && !target?.closest('#quality-menu')) closeQualityMenu();
   if (!target?.closest('.connection-check-wrap') && !$('#connection-check-panel').hidden) toggleConnectivityPanel(false);
+  if (!target?.closest('.participant-avatar.actionable') && !target?.closest('.participant-menu')) closeParticipantMenu();
 });
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !$('#connection-check-panel').hidden) toggleConnectivityPanel(false);
+  if (event.key === 'Escape') closeParticipantMenu();
 });
 
 $('#join-form').addEventListener('submit', (event) => {

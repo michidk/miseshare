@@ -36,6 +36,11 @@ export function buildRoomRouter(service: RoomService) {
     await service.leaveRoom(roomId(request), identity.participantId, identity.token);
     response.status(204).end();
   }));
+  router.delete('/:roomId/participants/:participantId', route(async (request, response) => {
+    const identity = requireIdentity(request);
+    await service.kickParticipant(roomId(request), identity.participantId, identity.token, participantId(request));
+    response.status(204).end();
+  }));
   router.post('/:roomId/signals', route(async (request, response) => {
     const identity = requireIdentity(request);
     await service.enforceRateLimit('signal-send', `${clientIdentity(request)}:${identity.participantId}`, { limit: 600, windowMs: 60_000 });
@@ -67,6 +72,13 @@ function roomId(request: Request) {
   const value = request.params.roomId;
   const id = Array.isArray(value) ? value[0] ?? '' : value;
   if (!/^[a-z2-9]{4}-[a-z2-9]{4}$/.test(id)) throw new RoomApiError('room-unavailable', 404, 'This room is no longer available.');
+  return id;
+}
+
+function participantId(request: Request) {
+  const value = request.params.participantId;
+  const id = Array.isArray(value) ? value[0] ?? '' : value;
+  if (!/^[A-Za-z0-9_-]{8,40}$/.test(id)) throw new RoomApiError('room-unavailable', 404, 'This participant is no longer available.');
   return id;
 }
 
