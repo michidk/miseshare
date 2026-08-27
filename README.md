@@ -1,6 +1,6 @@
 # miseshare
 
-A deliberately small, open-source screen sharing service. Create a room, send a link, and let several participants share at once—no accounts, downloads, or persisted room history.
+A deliberately small, open-source screen and file sharing service. Create a room, send a link, and let several participants share at once—no accounts, installs, or persisted room history.
 
 [![miseshare landing page](.github/images/miseshare.png)](https://miseshare.vercel.app)
 
@@ -10,7 +10,7 @@ Live demo: [miseshare.vercel.app](https://miseshare.vercel.app)
 
 If a connection fails, use the in-room connection check or [icecheck](https://github.com/michidk/icecheck) ([live tool](https://icecheck.vercel.app)) to isolate signaling, ICE candidate, data-channel, and media-path problems between two browsers.
 
-Native WebRTC video tracks carry the 720p, 1080p, and 60 fps screen-sharing presets over encrypted browser connections. A configured TURN server can relay that encrypted traffic when a direct path is unavailable. A separate lossless text mode sends pixel-exact tile deltas over WebRTC data channels. A small REST API stores temporary room admission and WebRTC signaling messages in PostgreSQL; it never receives screen, chat, or audio data.
+Native WebRTC video tracks carry the 720p, 1080p, and 60 fps screen-sharing presets over encrypted browser connections. A configured TURN server can relay that encrypted traffic when a direct path is unavailable. A separate lossless text mode sends pixel-exact tile deltas over WebRTC data channels. File drops use a dedicated reliable data channel, begin only after each recipient accepts, and never upload file contents to the service. A small REST API stores temporary room admission and WebRTC signaling messages in PostgreSQL; it never receives screen, chat, audio, or file data.
 
 The Node server and browser application are authored in strict TypeScript. The client build compiles `src/app.ts` to the browser bundle in `public/app.js`.
 
@@ -92,6 +92,7 @@ Global Twitch, BetterTTV, FrankerFaceZ, and 7TV emotes are available without pro
 - Room, participant, and signaling records are short-lived. Host heartbeats extend the room while the tab is open; stale participants and signaling messages expire automatically.
 - Each browser receives an opaque participant token. The API hashes that token before storage and derives the signaling sender from the authenticated request rather than trusting client-provided identity.
 - Browsers exchange SDP descriptions and ICE candidates through authenticated REST mailboxes. Once negotiation completes, native `RTCPeerConnection` data channels and media tracks communicate over encrypted direct or TURN-relayed paths.
+- Room participants can drop files up to 256 MB to every connected peer. Each recipient accepts independently, receives ordered 32 KiB chunks with backpressure, and downloads the reconstructed browser-local blob; file bytes never touch the REST API or database.
 - Every participant can publish independently, so several screens can be live at once. Each publisher opens an encrypted peer connection to every other room participant.
 - The first media codec is `text-lossless-v1`: it captures native RGBA pixels, compares 128 px tiles exactly, DEFLATE-compresses only changed tiles, and sends a periodic repair keyframe every 15 seconds. Frames are split into 48 KiB messages; a dropped or invalid delta triggers an immediate keyframe request before rendering resumes.
 - Stream audio is kept on a separate native WebRTC media track. Publishers can stop sending it without restarting the screen codec, and every receiver can mute each incoming stream independently.
@@ -99,7 +100,7 @@ Global Twitch, BetterTTV, FrankerFaceZ, and 7TV emotes are available without pro
 - A host-coordinated activity log records joins, leaves, stream starts/stops, audio changes, and settings changes alongside chat. Only the latest 100 entries live in the host's browser memory.
 - `src/room-api/index.ts` is the server boundary for room admission and signaling storage. Its Drizzle/PostgreSQL implementation remains internal.
 - `src/signaling/index.ts` is the browser boundary for REST room lifecycle, heartbeat, and signaling mailboxes.
-- `src/rtc/index.ts` owns native WebRTC negotiation and recovery, fixed control/screen/diagnostics channels, MessagePack serialization, and audio/video transceivers.
+- `src/rtc/index.ts` owns native WebRTC negotiation and recovery, fixed control/screen/diagnostics/drop channels, MessagePack serialization, and audio/video transceivers. `src/drop/index.ts` owns file offers, acceptance, chunking, backpressure, cancellation, and reconstruction.
 - `src/media/index.ts` owns encoder, renderer, backpressure, and presentation cleanup. `src/room/index.ts` owns validated host/viewer messages and UI session state.
 - `src/chat-ui/index.ts`, `src/emotes/index.ts`, and `src/ice-config/index.ts` isolate browser chat behavior, the same-origin emote proxy, and ephemeral ICE configuration behind small public interfaces.
 - There is no recording, analytics, account system, or backend media-processing path.

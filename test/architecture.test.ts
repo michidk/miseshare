@@ -4,7 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 const sourceRoot = path.resolve(import.meta.dirname, '../src');
-const modules = ['chat-ui', 'emotes', 'ice-config', 'media', 'room', 'room-api', 'rtc', 'signaling'];
+const modules = ['chat-ui', 'drop', 'emotes', 'ice-config', 'media', 'room', 'room-api', 'rtc', 'signaling'];
 
 test('feature modules expose internals only through their public entrypoints', () => {
   const violations: string[] = [];

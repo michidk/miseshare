@@ -1,4 +1,5 @@
 import { buildChatEmoteRenderer, buildRoomNotificationController } from './chat-ui/index.js';
+import { P2pDrop, type DropTransferUpdate } from './drop/index.js';
 import {
   createTextPresentation,
   NATIVE_VIDEO_CODEC_ID,
@@ -196,6 +197,8 @@ const pendingConnectivityDownloads = new Map<string, PendingConnectivityTransfer
 const pendingConnectivityUploads = new Map<string, PendingConnectivityTransfer>();
 const incomingConnectivityUploads = new Map<string, IncomingConnectivityTransfer>();
 const connectivityDownloadResponseAt = new Map<string, number>();
+const dropTransfers = new Map<string, DropTransferUpdate & { downloadUrl?: string }>();
+const drop = new P2pDrop({ update: handleDropUpdate });
 const CONNECTIVITY_PROBE_BYTES = 512 * 1024;
 const CONNECTIVITY_CHUNK_BYTES = 32 * 1024;
 const CONNECTIVITY_CHUNKS = CONNECTIVITY_PROBE_BYTES / CONNECTIVITY_CHUNK_BYTES;
@@ -438,6 +441,10 @@ function startNativeMesh(roomSignaling: RestSignalingSession) {
 
 function routePeer(peerConnection: RtcPeerChannels) {
   peerChannels.set(peerConnection.peerId, peerConnection);
+  drop.registerPeer(peerConnection.peerId, peerConnection.drop);
+  peerConnection.drop.on('open', updateDropAvailability);
+  peerConnection.drop.on('close', updateDropAvailability);
+  updateDropAvailability();
   peerConnection.diagnostics.on('message', (value) => handleConnectivityMessage(peerConnection, value));
   peerConnection.diagnostics.on('close', () => cancelPeerConnectivity(peerConnection.peerId, 'The peer disconnected during the check.'));
   peerConnection.diagnostics.on('error', () => cancelPeerConnectivity(peerConnection.peerId, 'The connection check failed.'));
@@ -982,6 +989,7 @@ function updateRoomUI() {
   audioButton.classList.toggle('muted', hasAudio && !audioEnabled);
   const label = audioButton.querySelector('span');
   if (label) label.textContent = audioEnabled ? 'Stop audio' : 'Resume audio';
+  updateDropAvailability();
 }
 
 function updateParticipantCount(count: number) {
@@ -1634,6 +1642,7 @@ function removeViewer(viewerId: string, expectedConnection?: RtcChannel) {
 }
 
 function handlePeerClosed(peerId: string) {
+  drop.unregisterPeer(peerId);
   peerChannels.delete(peerId);
   connectivityResults.delete(peerId);
   cancelPeerConnectivity(peerId, 'The peer disconnected during the check.');
@@ -2007,6 +2016,192 @@ function playChatSound() {
   } catch {}
 }
 
+function openDropDialog() {
+  const dialog = $<HTMLDialogElement>('#drop-dialog');
+  renderDropTransfers();
+  if (!dialog.open) dialog.showModal();
+}
+
+function updateDropAvailability() {
+  const connected = drop.availablePeerIds().length;
+  const button = $<HTMLButtonElement>('#drop-button');
+  button.disabled = session.connection !== 'live' || session.ended;
+  $('#drop-peer-count').textContent = connected
+    ? `${connected} connected ${connected === 1 ? 'peer' : 'peers'}`
+    : 'No peers connected';
+}
+
+function shareDroppedFiles(files: Iterable<File>) {
+  let offered = 0;
+  let recipients = 0;
+  try {
+    for (const file of files) {
+      const result = drop.offer(file);
+      offered += 1;
+      recipients = result.recipients;
+    }
+    if (offered) showToast(`${offered === 1 ? 'File' : `${offered} files`} offered to ${recipients} ${recipients === 1 ? 'peer' : 'peers'}.`);
+  } catch (error) {
+    showToast(errorMessage(error, 'Could not offer the selected file.'), 'error');
+  }
+}
+
+function handleDropUpdate(update: DropTransferUpdate) {
+  const transferKey = dropTransferKey(update);
+  const existing = dropTransfers.get(transferKey);
+  let downloadUrl = existing?.downloadUrl;
+  if (update.blob) {
+    if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+    downloadUrl = URL.createObjectURL(update.blob);
+  }
+  dropTransfers.set(transferKey, { ...update, downloadUrl });
+  trimDropTransfers();
+  renderDropTransfers();
+  if (update.direction === 'incoming' && update.status === 'offered' && !existing) {
+    openDropDialog();
+    showToast(`${dropPeerName(update.peerId)} wants to send ${update.name}.`);
+  } else if (update.direction === 'incoming' && update.status === 'completed') {
+    showToast(`${update.name} is ready to download.`);
+  }
+}
+
+function renderDropTransfers() {
+  const list = $('#drop-transfer-list');
+  list.replaceChildren();
+  const transfers = [...dropTransfers.values()].reverse();
+  if (!transfers.length) {
+    const empty = document.createElement('p');
+    empty.className = 'drop-empty';
+    empty.textContent = drop.availablePeerIds().length
+      ? 'Files you send or receive will appear here.'
+      : 'Invite someone to the room to start dropping files.';
+    list.append(empty);
+  } else {
+    for (const transfer of transfers) list.append(renderDropTransfer(transfer));
+  }
+  const incomingOffers = transfers.filter((transfer) => transfer.direction === 'incoming' && transfer.status === 'offered').length;
+  const badge = $('#drop-button-badge');
+  badge.hidden = incomingOffers === 0;
+  badge.textContent = incomingOffers ? String(incomingOffers) : '';
+  updateDropAvailability();
+}
+
+function renderDropTransfer(transfer: DropTransferUpdate & { downloadUrl?: string }) {
+  const article = document.createElement('article');
+  article.className = 'drop-transfer';
+  article.dataset.status = transfer.status;
+
+  const icon = document.createElement('span');
+  icon.className = 'drop-file-icon';
+  icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7zM14 3v5h5M10 13h5M10 17h5"/></svg>';
+
+  const main = document.createElement('div');
+  main.className = 'drop-transfer-main';
+  const copy = document.createElement('div');
+  copy.className = 'drop-transfer-copy';
+  const name = document.createElement('strong');
+  name.textContent = transfer.name;
+  name.title = transfer.name;
+  const size = document.createElement('span');
+  size.textContent = formatDropBytes(transfer.size);
+  copy.append(name, size);
+  const detail = document.createElement('div');
+  detail.className = 'drop-transfer-detail';
+  const peer = document.createElement('span');
+  peer.textContent = `${transfer.direction === 'incoming' ? 'From' : 'To'} ${dropPeerName(transfer.peerId)}`;
+  const status = document.createElement('span');
+  status.textContent = dropStatusLabel(transfer);
+  detail.append(peer, status);
+  main.append(copy, detail);
+  if (['sending', 'receiving', 'completed'].includes(transfer.status)) {
+    const progress = document.createElement('div');
+    progress.className = 'drop-progress';
+    const bar = document.createElement('i');
+    const percent = transfer.size ? Math.min(100, (transfer.transferred / transfer.size) * 100) : 100;
+    bar.style.setProperty('--drop-progress', `${percent}%`);
+    progress.append(bar);
+    main.append(progress);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'drop-transfer-actions';
+  if (transfer.direction === 'incoming' && transfer.status === 'offered') {
+    actions.append(
+      dropAction('Decline', 'drop-decline', () => drop.decline(transfer.peerId, transfer.id)),
+      dropAction('Accept', 'drop-accept', () => drop.accept(transfer.peerId, transfer.id)),
+    );
+  } else if (transfer.direction === 'incoming' && transfer.status === 'completed' && transfer.downloadUrl) {
+    const download = document.createElement('a');
+    download.className = 'drop-download';
+    download.href = transfer.downloadUrl;
+    download.download = transfer.name;
+    download.textContent = 'Download';
+    actions.append(download);
+  } else if (['waiting', 'sending', 'receiving'].includes(transfer.status)) {
+    actions.append(dropAction('Cancel', 'drop-cancel', () => drop.cancel(transfer.peerId, transfer.id)));
+  }
+
+  article.append(icon, main);
+  if (actions.childElementCount) article.append(actions);
+  return article;
+}
+
+function dropAction(label: string, className: string, action: () => unknown) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = className;
+  button.textContent = label;
+  button.addEventListener('click', action);
+  return button;
+}
+
+function dropStatusLabel(transfer: DropTransferUpdate) {
+  if (transfer.status === 'offered') return 'Needs your approval';
+  if (transfer.status === 'waiting') return 'Waiting for approval';
+  if (transfer.status === 'sending') return `${dropPercent(transfer)} sent`;
+  if (transfer.status === 'receiving') return `${dropPercent(transfer)} received`;
+  if (transfer.status === 'completed') return transfer.direction === 'incoming' ? 'Ready to download' : 'Sent';
+  if (transfer.status === 'declined') return 'Declined';
+  if (transfer.status === 'cancelled') return 'Cancelled';
+  return transfer.error || 'Transfer failed';
+}
+
+function dropPercent(transfer: DropTransferUpdate) {
+  return `${transfer.size ? Math.floor((transfer.transferred / transfer.size) * 100) : 100}%`;
+}
+
+function dropPeerName(peerId: string) {
+  return participantNames.get(peerId) || (peerId === session.hostId ? 'Host' : 'Peer');
+}
+
+function formatDropBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+
+function dropTransferKey(transfer: Pick<DropTransferUpdate, 'direction' | 'peerId' | 'id'>) {
+  return `${transfer.direction}:${transfer.peerId}:${transfer.id}`;
+}
+
+function trimDropTransfers() {
+  while (dropTransfers.size > 50) {
+    const firstKey = dropTransfers.keys().next().value as string | undefined;
+    if (!firstKey) break;
+    const transfer = dropTransfers.get(firstKey);
+    if (transfer?.downloadUrl) URL.revokeObjectURL(transfer.downloadUrl);
+    dropTransfers.delete(firstKey);
+  }
+}
+
+function clearDropTransfers() {
+  for (const transfer of dropTransfers.values()) {
+    if (transfer.downloadUrl) URL.revokeObjectURL(transfer.downloadUrl);
+  }
+  dropTransfers.clear();
+  renderDropTransfers();
+}
+
 function endViewer(message: string) {
   if (!session.end()) return;
   stopLocalPresentation();
@@ -2034,6 +2229,8 @@ async function leaveRoom() {
 function disposeConnections() {
   toggleConnectivityPanel(false);
   connectivityResults.clear();
+  drop.clear();
+  clearDropTransfers();
   viewerControl = undefined;
   signaling?.stop();
   signaling = undefined;
@@ -2104,6 +2301,30 @@ window.addEventListener('pagehide', handlePageDeparture);
 window.addEventListener('beforeunload', () => handlePageDeparture());
 $('#copy-room-code').addEventListener('click', () => void copyText(session.roomId, 'Room code copied.'));
 $('#copy-invite-button').addEventListener('click', () => void copyText(`${location.origin}${appPath(`room/${session.roomId}`)}`, 'Invite link copied.'));
+$('#drop-button').addEventListener('click', openDropDialog);
+$('#drop-dialog-close').addEventListener('click', () => $<HTMLDialogElement>('#drop-dialog').close());
+$('#drop-file-input').addEventListener('change', (event) => {
+  const input = event.currentTarget as HTMLInputElement;
+  if (input.files) shareDroppedFiles(input.files);
+  input.value = '';
+});
+const dropZone = $('#drop-zone');
+for (const eventName of ['dragenter', 'dragover']) {
+  dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    dropZone.classList.add('dragging');
+  });
+}
+for (const eventName of ['dragleave', 'drop']) {
+  dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    dropZone.classList.remove('dragging');
+  });
+}
+dropZone.addEventListener('drop', (event) => {
+  const files = (event as DragEvent).dataTransfer?.files;
+  if (files?.length) shareDroppedFiles(files);
+});
 $('#connection-check-button').addEventListener('click', () => toggleConnectivityPanel());
 $('#connection-check-close').addEventListener('click', () => toggleConnectivityPanel(false));
 $('#connection-check-run').addEventListener('click', () => void runConnectivityChecks());

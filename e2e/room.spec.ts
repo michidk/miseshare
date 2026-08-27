@@ -20,6 +20,41 @@ test('two participants can join and exchange a chat message', async ({ browser, 
   await viewerContext.close();
 });
 
+test('a participant can accept and download a peer-to-peer file drop', async ({ browser, page }) => {
+  await page.goto('/');
+  await page.locator('#share-button').click();
+  await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
+
+  const viewerContext = await browser.newContext();
+  const viewer = await viewerContext.newPage();
+  await viewer.goto(page.url());
+  await expect(viewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
+
+  await page.locator('#drop-button').click();
+  await expect(page.locator('#drop-peer-count')).toHaveText('1 connected peer', { timeout: 20_000 });
+  await page.locator('#drop-file-input').setInputFiles({
+    name: 'hello.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('hello over WebRTC'),
+  });
+
+  await expect(viewer.locator('#drop-dialog')).toBeVisible();
+  await expect(viewer.locator('.drop-transfer')).toContainText('hello.txt');
+  await viewer.locator('.drop-accept').click();
+  const downloadLink = viewer.locator('.drop-download');
+  await expect(downloadLink).toBeVisible({ timeout: 20_000 });
+  const downloadPromise = viewer.waitForEvent('download');
+  await downloadLink.click();
+  const download = await downloadPromise;
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  expect(download.suggestedFilename()).toBe('hello.txt');
+  expect(Buffer.concat(chunks).toString()).toBe('hello over WebRTC');
+  await expect(page.locator('.drop-transfer')).toContainText('Sent');
+  await viewerContext.close();
+});
+
 test('lossless text mode renders a multi-chunk frame pixel-exactly', async ({ browser, page }) => {
   await page.goto('/');
   await page.locator('#share-button').click();

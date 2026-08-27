@@ -145,6 +145,7 @@ export class RtcMesh {
     peer.control.close();
     peer.screen.close();
     peer.diagnostics.close();
+    peer.drop.close();
     peer.connection.close();
     this.events.peerClosed?.(peerId);
   }
@@ -162,6 +163,7 @@ export class RtcMesh {
     const control = new NativeRtcChannel(peerId, connection.createDataChannel('control', { negotiated: true, id: 0, ordered: true }));
     const screen = new NativeRtcChannel(peerId, connection.createDataChannel('screen', { negotiated: true, id: 1, ordered: true }));
     const diagnostics = new NativeRtcChannel(peerId, connection.createDataChannel('diagnostics', { negotiated: true, id: 2, ordered: true }));
+    const drop = new NativeRtcChannel(peerId, connection.createDataChannel('drop', { negotiated: true, id: 3, ordered: true }));
     const audioSender = connection.addTransceiver(this.audioTrack ?? 'audio', { direction: 'sendrecv' }).sender;
     const videoSender = connection.addTransceiver(this.videoTrack ?? 'video', { direction: 'sendrecv' }).sender;
     const peer: PeerState = {
@@ -170,6 +172,7 @@ export class RtcMesh {
       control,
       screen,
       diagnostics,
+      drop,
       audioSender,
       videoSender,
       makingOffer: false,

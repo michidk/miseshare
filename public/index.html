@@ -57,6 +57,7 @@
           <span><svg viewBox="0 0 24 24"><path d="M20 15a3 3 0 0 1-3 3H9l-5 3v-6a3 3 0 0 1-1-2.2V7a3 3 0 0 1 3-3h11a3 3 0 0 1 3 3v8Z"/></svg> Live chat</span>
           <span><svg viewBox="0 0 24 24"><path d="M4 5h16v12H4zM8 21h8M12 17v4"/></svg> Multi-screen sharing</span>
           <span><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5L11 19V5ZM15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/></svg> Shared audio</span>
+          <span><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg> P2P file drops</span>
         </div>
 
         <div class="hero-actions" aria-label="Room actions">
@@ -156,6 +157,9 @@
               </footer>
             </section>
           </div>
+          <button id="drop-button" class="drop-button" type="button" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg><span>Drop</span><i id="drop-button-badge" hidden></i>
+          </button>
           <button id="copy-room-code" class="room-code-pill" type="button" title="Copy room code"><span>Room</span><b id="room-code-display"></b><svg viewBox="0 0 24 24"><path d="M8 8h11v11H8zM5 16V5h11"/></svg></button>
           <button id="leave-room-button" class="close-room-button" type="button"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg><span>Leave room</span></button>
         </div>
@@ -220,7 +224,7 @@
         </aside>
         <button id="chat-expand-button" class="chat-expand-button" type="button" aria-label="Open chat" title="Open chat"><span class="chat-expand-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15a3 3 0 0 1-3 3H9l-5 3v-6a3 3 0 0 1-1-2.2V7a3 3 0 0 1 3-3h11a3 3 0 0 1 3 3v8Z"/></svg><i class="chat-expand-dot" aria-hidden="true"></i></span><span class="chat-expand-label">Chat</span></button>
       </div>
-      <p class="room-privacy"><svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2M6 10h12v10H6z"/></svg> Every stream is encrypted between browsers and requires a direct peer-to-peer connection.</p>
+      <p class="room-privacy"><svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2M6 10h12v10H6z"/></svg> Streams and file drops are encrypted between browsers; file contents never pass through the server.</p>
     </main>
 
     <div id="quality-menu" class="quality-menu" hidden>
@@ -239,6 +243,29 @@
       </div>
       <div class="bandwidth-card"><div><span>Estimated upload</span><strong id="bandwidth-total">0 Mbps</strong></div><small id="bandwidth-detail">Content-dependent lossless deltas × 1 peer</small><small id="bandwidth-capacity">Text mode is lossless; motion can use substantially more bandwidth.</small></div>
     </div>
+
+    <dialog id="drop-dialog" class="drop-dialog" aria-labelledby="drop-title">
+      <div class="drop-dialog-shell">
+        <header>
+          <span class="drop-dialog-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg></span>
+          <span><small>Peer-to-peer sharing</small><strong id="drop-title">Drop files</strong></span>
+          <button id="drop-dialog-close" type="button" aria-label="Close file drops"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </header>
+        <label id="drop-zone" class="drop-zone" for="drop-file-input">
+          <input id="drop-file-input" type="file" multiple hidden />
+          <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L8 8m4-4 4 4M5 15v4h14v-4"/></svg></span>
+          <strong>Choose files or drop them here</strong>
+          <small>Sent directly to everyone in the room after they accept · up to 256 MB each</small>
+        </label>
+        <section class="drop-transfers" aria-labelledby="drop-transfers-title">
+          <div class="drop-transfers-heading"><strong id="drop-transfers-title">Transfers</strong><span id="drop-peer-count">No peers connected</span></div>
+          <div id="drop-transfer-list" class="drop-transfer-list" aria-live="polite">
+            <p class="drop-empty">Files you send or receive will appear here.</p>
+          </div>
+        </section>
+        <p class="drop-privacy"><svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2M6 10h12v10H6z"/></svg><span>File bytes travel over the room’s encrypted WebRTC connections. Nothing is uploaded or stored by miseshare.</span></p>
+      </div>
+    </dialog>
 
     <dialog id="join-password-dialog" class="password-dialog" aria-labelledby="join-password-title">
       <form id="join-password-form" method="dialog">

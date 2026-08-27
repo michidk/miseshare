@@ -580,6 +580,11 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 .connection-check-button:hover, .connection-check-button[aria-expanded="true"] { border-color: rgba(49,88,245,.25); color: var(--blue); background: white; }
 .connection-check-button:focus-visible, .connection-check-panel button:focus-visible { outline: 3px solid rgba(49,88,245,.16); outline-offset: 1px; }
 .connection-check-button svg { width: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.drop-button { height: 38px; padding: 0 11px; position: relative; display: flex; align-items: center; gap: 7px; border: 1px solid rgba(49,88,245,.18); border-radius: 10px; color: var(--blue); background: rgba(255,255,255,.68); cursor: pointer; font: inherit; font-size: 9px; font-weight: 750; transition: color .18s, border-color .18s, background .18s; }
+.drop-button:hover { border-color: rgba(49,88,245,.34); background: white; }
+.drop-button:disabled { color: #999ba1; border-color: var(--line); cursor: not-allowed; opacity: .7; }
+.drop-button svg { width: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.drop-button i { min-width: 17px; height: 17px; padding: 0 5px; position: absolute; top: -7px; right: -7px; display: grid; place-items: center; border: 2px solid #f1eee7; border-radius: 999px; color: white; background: var(--red); box-shadow: 0 2px 5px rgba(209,67,67,.25); font-size: 7px; font-style: normal; }
 .connection-check-panel { width: 420px; max-height: min(620px, calc(100vh - 105px)); padding: 15px; position: absolute; z-index: 40; top: calc(100% + 9px); right: 0; overflow-y: auto; overscroll-behavior: contain; border: 1px solid rgba(23,25,31,.11); border-radius: 15px; background: rgba(255,254,250,.98); box-shadow: 0 20px 55px rgba(30,35,50,.18), 0 3px 10px rgba(30,35,50,.06); animation: connection-panel-in .16s ease-out; }
 .connection-check-panel[hidden] { display: none; }
 .connection-check-panel > header { min-height: 38px; margin-bottom: 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; }
@@ -733,6 +738,51 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 .room-privacy { margin: 15px 0 0; display: flex; align-items: center; justify-content: center; gap: 7px; color: #858681; font-size: 9px; }
 .room-privacy svg { width: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 
+.drop-dialog { width: min(620px, calc(100% - 32px)); max-height: min(760px, calc(100vh - 32px)); padding: 0; overflow: hidden; border: 0; border-radius: 20px; color: var(--ink); background: transparent; box-shadow: 0 28px 90px rgba(22,25,36,.28); }
+.drop-dialog::backdrop { background: rgba(20,23,31,.48); backdrop-filter: blur(5px); }
+.drop-dialog[open] { animation: password-dialog-in .18s ease-out; }
+.drop-dialog-shell { max-height: min(760px, calc(100vh - 32px)); padding: 20px; overflow-y: auto; border: 1px solid rgba(255,255,255,.58); border-radius: 20px; background: var(--white); scrollbar-width: thin; }
+.drop-dialog header { margin-bottom: 17px; display: grid; grid-template-columns: 42px minmax(0, 1fr) 34px; align-items: center; gap: 11px; }
+.drop-dialog-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; color: var(--blue); background: rgba(49,88,245,.09); }
+.drop-dialog-icon svg { width: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.drop-dialog header > span:nth-child(2) { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.drop-dialog header small { color: var(--blue); font-size: 8px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.drop-dialog header strong { font-size: 19px; letter-spacing: -.035em; }
+.drop-dialog header button { width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 9px; color: #7d7f87; background: transparent; cursor: pointer; }
+.drop-dialog header button:hover { color: var(--ink); background: #efede7; }
+.drop-dialog header button svg { width: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.drop-zone { min-height: 145px; padding: 22px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1.5px dashed rgba(49,88,245,.3); border-radius: 15px; color: #555863; background: rgba(49,88,245,.045); cursor: pointer; text-align: center; transition: border-color .18s, background .18s, transform .18s; }
+.drop-zone:hover, .drop-zone.dragging { border-color: var(--blue); background: rgba(49,88,245,.085); transform: translateY(-1px); }
+.drop-zone > span { width: 43px; height: 43px; margin-bottom: 10px; display: grid; place-items: center; border-radius: 12px; color: var(--blue); background: white; box-shadow: 0 5px 15px rgba(49,88,245,.1); }
+.drop-zone svg { width: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.drop-zone strong { font-size: 12px; }
+.drop-zone small { max-width: 390px; margin-top: 5px; color: #888a91; font-size: 9px; line-height: 1.45; }
+.drop-transfers { margin-top: 18px; }
+.drop-transfers-heading { margin-bottom: 9px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.drop-transfers-heading strong { font-size: 11px; }
+.drop-transfers-heading span { color: #92938f; font-size: 8px; }
+.drop-transfer-list { display: flex; flex-direction: column; gap: 8px; }
+.drop-empty { min-height: 72px; margin: 0; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 11px; color: #979793; background: rgba(239,237,231,.4); font-size: 9px; text-align: center; }
+.drop-transfer { min-width: 0; padding: 11px; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,.72); }
+.drop-file-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; color: var(--blue); background: rgba(49,88,245,.08); }
+.drop-file-icon svg { width: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.drop-transfer-main { min-width: 0; }
+.drop-transfer-copy { display: flex; align-items: baseline; justify-content: space-between; gap: 9px; }
+.drop-transfer-copy strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.drop-transfer-copy span { flex: 0 0 auto; color: #85878f; font-size: 8px; }
+.drop-transfer-detail { margin-top: 3px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #92938f; font-size: 8px; }
+.drop-progress { height: 4px; margin-top: 7px; overflow: hidden; border-radius: 999px; background: #ebe9e3; }
+.drop-progress i { width: var(--drop-progress, 0%); height: 100%; display: block; border-radius: inherit; background: var(--blue); transition: width .15s linear; }
+.drop-transfer[data-status="completed"] .drop-file-icon { color: var(--green); background: rgba(39,165,109,.1); }
+.drop-transfer[data-status="declined"] .drop-file-icon, .drop-transfer[data-status="cancelled"] .drop-file-icon, .drop-transfer[data-status="error"] .drop-file-icon { color: #9b6b6b; background: rgba(209,67,67,.08); }
+.drop-transfer-actions { display: flex; align-items: center; gap: 6px; }
+.drop-transfer-actions button, .drop-transfer-actions a { min-height: 31px; padding: 0 9px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 8px; color: #666972; background: white; cursor: pointer; font: inherit; font-size: 8px; font-weight: 750; text-decoration: none; }
+.drop-transfer-actions .drop-accept, .drop-transfer-actions .drop-download { border-color: rgba(49,88,245,.18); color: white; background: var(--blue); }
+.drop-transfer-actions button:hover, .drop-transfer-actions a:hover { border-color: rgba(49,88,245,.28); color: var(--blue); background: rgba(49,88,245,.06); }
+.drop-transfer-actions .drop-accept:hover, .drop-transfer-actions .drop-download:hover { color: white; background: var(--blue-dark); }
+.drop-privacy { margin: 14px 0 0; padding: 10px 11px; display: flex; align-items: flex-start; gap: 8px; border-radius: 10px; color: #7e807f; background: #efede7; font-size: 8px; line-height: 1.45; }
+.drop-privacy svg { width: 15px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+
 .quality-menu .coming-soon { padding: 4px 6px; border-radius: 5px; color: #7c7f88; background: #eceae5; font-size: 8px; font-weight: 800; text-transform: uppercase; }
 .quality-menu > .bandwidth-card { margin: 8px 5px 4px; }
 
@@ -813,6 +863,8 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 @media (max-width: 760px) {
   .connection-check-button span { display: none; }
   .connection-check-button { width: 38px; padding: 0; justify-content: center; }
+  .drop-button span { display: none; }
+  .drop-button { width: 38px; padding: 0; justify-content: center; }
 }
 
 @media (max-width: 620px) {
@@ -871,6 +923,11 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
   .password-dialog form { padding: 23px 20px 20px; }
   .password-dialog-actions { grid-template-columns: 1fr; }
   .password-dialog-actions .password-cancel { order: 2; }
+  .drop-dialog-shell { padding: 16px; }
+  .drop-zone { min-height: 132px; padding: 18px 12px; }
+  .drop-transfer { grid-template-columns: 34px minmax(0, 1fr); }
+  .drop-file-icon { width: 34px; height: 34px; }
+  .drop-transfer-actions { grid-column: 1 / -1; justify-content: flex-end; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -17,6 +17,7 @@ export interface RtcPeerChannels {
   control: RtcChannel;
   screen: RtcChannel;
   diagnostics: RtcChannel;
+  drop: RtcChannel;
 }
 
 export interface RtcConnectionStats {
