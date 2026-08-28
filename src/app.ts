@@ -555,7 +555,6 @@ function handleRoomMessage(value: unknown) {
     case 'participant-joined':
       rememberParticipant(message.participant);
       renderParticipantPresence();
-      mesh?.connect(message.participant.id);
       if (localPresentation) connectLocalStreamTo(message.participant.id);
       break;
     case 'participant-left':
@@ -788,8 +787,15 @@ function attachIncomingNativeStream(presenterId: string) {
   const stream = remoteVideoStreams.get(presenterId);
   const video = streamCardMedia<HTMLVideoElement>(presenterId, 'video');
   if (!stream || !video || presenter?.settings.codec !== NATIVE_VIDEO_CODEC_ID) return;
+  const connected = () => setCardConnected(presenterId);
+  video.addEventListener('loadeddata', connected, { once: true });
+  video.addEventListener('resize', connected, { once: true });
+  video.addEventListener('playing', connected, { once: true });
+  video.requestVideoFrameCallback?.(() => connected());
   video.srcObject = stream;
-  void video.play().then(() => setCardConnected(presenterId)).catch(() => {});
+  if (stream.getVideoTracks().some((track) => track.readyState === 'live' && !track.muted)
+    || (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0)) connected();
+  void video.play().catch(() => {});
 }
 
 function closeIncomingAudio(presenterId: string) {
@@ -881,7 +887,6 @@ function removePresenter(presenterId: string) {
   incomingTextReceivers.get(presenterId)?.close();
   incomingTextReceivers.delete(presenterId);
   closeIncomingAudio(presenterId);
-  remoteVideoStreams.delete(presenterId);
   mutedPresenters.delete(presenterId);
   streamGrid.querySelector(`[data-presenter-id="${CSS.escape(presenterId)}"]`)?.remove();
   updateStreamGrid();

@@ -2,7 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'postgresql://miseshare:miseshare@127.0.0.1:54329/miseshare';
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
-const baseURL = `http://127.0.0.1:${port}`;
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL;
+const baseURL = externalBaseURL ?? `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: './e2e',
@@ -18,7 +19,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     video: 'retain-on-failure',
   },
-  webServer: {
+  webServer: externalBaseURL ? undefined : {
     command: 'npm start',
     url: `${baseURL}/health/ready`,
     reuseExistingServer: false,

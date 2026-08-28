@@ -112,7 +112,7 @@ test('lossless text mode renders a multi-chunk frame pixel-exactly', async ({ br
   await viewerContext.close();
 });
 
-test('a participant who joins after native sharing started receives the stream', async ({ browser, page }) => {
+test('a same-context tab joining after native sharing started receives the stream', async ({ page }) => {
   await page.goto('/?test');
   await page.locator('#share-button').click();
   await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
@@ -120,22 +120,20 @@ test('a participant who joins after native sharing started receives the stream',
   await page.locator('#test-stream-button').click();
   await expect(page.locator('.stream-card')).not.toHaveClass(/connecting/);
 
-  const viewerContext = await browser.newContext();
-  const viewer = await viewerContext.newPage();
+  const viewer = await page.context().newPage();
   await viewer.goto(page.url());
   const remoteCard = viewer.locator('.stream-card');
   await expect(remoteCard).not.toHaveClass(/connecting/, { timeout: 30_000 });
   await expect(remoteCard.locator('video')).toHaveJSProperty('videoWidth', 1280);
-  await viewerContext.close();
+  await viewer.close();
 });
 
-test('an existing participant receives a native stream started by the host', async ({ browser, page }) => {
+test('an existing same-context tab receives a native stream started by the host', async ({ page }) => {
   await page.goto('/?test');
   await page.locator('#share-button').click();
   await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
 
-  const viewerContext = await browser.newContext();
-  const viewer = await viewerContext.newPage();
+  const viewer = await page.context().newPage();
   await viewer.goto(page.url());
   await expect(viewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
 
@@ -143,16 +141,15 @@ test('an existing participant receives a native stream started by the host', asy
   const remoteCard = viewer.locator('.stream-card');
   await expect(remoteCard).not.toHaveClass(/connecting/, { timeout: 30_000 });
   await expect(remoteCard.locator('video')).toHaveJSProperty('videoWidth', 1280);
-  await viewerContext.close();
+  await viewer.close();
 });
 
-test('the host receives a native stream started by an existing participant', async ({ browser, page }) => {
+test('the host receives a native stream started by an existing same-context tab', async ({ page }) => {
   await page.goto('/?test');
   await page.locator('#share-button').click();
   await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
 
-  const viewerContext = await browser.newContext();
-  const viewer = await viewerContext.newPage();
+  const viewer = await page.context().newPage();
   await viewer.goto(`${page.url()}?test`);
   await expect(viewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
   await expect(viewer.locator('#test-stream-button')).toBeEnabled();
@@ -161,7 +158,35 @@ test('the host receives a native stream started by an existing participant', asy
   const remoteCard = page.locator('.stream-card');
   await expect(remoteCard).not.toHaveClass(/connecting/, { timeout: 30_000 });
   await expect(remoteCard.locator('video')).toHaveJSProperty('videoWidth', 1280);
-  await viewerContext.close();
+  await viewer.close();
+});
+
+test('an opener-cloned tab receives repeated host and participant streams', async ({ page }) => {
+  await page.goto('/?test');
+  await page.locator('#share-button').click();
+  await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
+
+  const popupPromise = page.waitForEvent('popup');
+  await page.evaluate(() => window.open(`${location.href}?test`, '_blank'));
+  const viewer = await popupPromise;
+  await expect(viewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
+
+  for (let cycle = 0; cycle < 3; cycle += 1) {
+    await page.bringToFront();
+    await page.locator('#test-stream-button').click();
+    await expect(viewer.locator('.stream-card video')).toHaveJSProperty('videoWidth', 1280, { timeout: 30_000 });
+    await expect(viewer.locator('.stream-card')).not.toHaveClass(/connecting/, { timeout: 30_000 });
+    await page.locator('#stream-button').click();
+    await expect(viewer.locator('.stream-card')).toHaveCount(0);
+
+    await viewer.bringToFront();
+    await viewer.locator('#test-stream-button').click();
+    await expect(page.locator('.stream-card')).not.toHaveClass(/connecting/, { timeout: 30_000 });
+    await expect(page.locator('.stream-card video')).toHaveJSProperty('videoWidth', 1280);
+    await viewer.locator('#stream-button').click();
+    await expect(page.locator('.stream-card')).toHaveCount(0);
+  }
+  await viewer.close();
 });
 
 test('landing page does not overflow a mobile viewport', async ({ page }) => {

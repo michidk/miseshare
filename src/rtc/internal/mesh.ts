@@ -4,8 +4,8 @@ import type { RtcConnectionStats, RtcMeshEvents, RtcPeerChannels } from '../type
 
 interface PeerState extends RtcPeerChannels {
   connection: RTCPeerConnection;
-  audioSender: RTCRtpSender;
-  videoSender: RTCRtpSender;
+  audioSender?: RTCRtpSender;
+  videoSender?: RTCRtpSender;
   makingOffer: boolean;
   negotiationPending: boolean;
   ignoreOffer: boolean;
@@ -32,6 +32,7 @@ export class RtcMesh {
 
   connect(peerId: string) {
     const peer = this.ensurePeer(peerId);
+    this.prepareSenders(peer);
     void peer.tracksReady.then(() => this.negotiate(peer));
     return peer;
   }
@@ -94,6 +95,8 @@ export class RtcMesh {
         peer.settingRemoteAnswer = description.type === 'answer';
         await peer.tracksReady;
         await peer.connection.setRemoteDescription(description);
+        this.prepareSenders(peer);
+        await peer.tracksReady;
         peer.settingRemoteAnswer = false;
         if (description.type === 'offer') {
           await peer.connection.setLocalDescription();
@@ -127,7 +130,8 @@ export class RtcMesh {
   async setAudioTrack(track: MediaStreamTrack | null) {
     this.audioTrack = track;
     await Promise.all([...this.peers.values()].map(async (peer) => {
-      await peer.audioSender.replaceTrack(track);
+      this.prepareSenders(peer);
+      await peer.audioSender?.replaceTrack(track);
       await this.negotiate(peer);
     }));
   }
@@ -136,8 +140,9 @@ export class RtcMesh {
     this.videoTrack = track;
     this.videoBitrate = bitrate;
     await Promise.all([...this.peers.values()].map(async (peer) => {
-      await peer.videoSender.replaceTrack(track);
-      await this.applyVideoBitrate(peer.videoSender);
+      this.prepareSenders(peer);
+      await peer.videoSender?.replaceTrack(track);
+      if (peer.videoSender) await this.applyVideoBitrate(peer.videoSender);
       await this.negotiate(peer);
     }));
   }
@@ -169,8 +174,6 @@ export class RtcMesh {
     const screen = new NativeRtcChannel(peerId, connection.createDataChannel('screen', { negotiated: true, id: 1, ordered: true }));
     const diagnostics = new NativeRtcChannel(peerId, connection.createDataChannel('diagnostics', { negotiated: true, id: 2, ordered: true }));
     const drop = new NativeRtcChannel(peerId, connection.createDataChannel('drop', { negotiated: true, id: 3, ordered: true }));
-    const audioSender = connection.addTransceiver(this.audioTrack ?? 'audio', { direction: 'sendrecv' }).sender;
-    const videoSender = connection.addTransceiver(this.videoTrack ?? 'video', { direction: 'sendrecv' }).sender;
     const peer: PeerState = {
       peerId,
       connection,
@@ -178,8 +181,6 @@ export class RtcMesh {
       screen,
       diagnostics,
       drop,
-      audioSender,
-      videoSender,
       makingOffer: false,
       negotiationPending: false,
       ignoreOffer: false,
@@ -193,7 +194,6 @@ export class RtcMesh {
     connection.addEventListener('icecandidate', (event) => {
       if (event.candidate) void this.send(peerId, 'candidate', event.candidate.toJSON());
     });
-    connection.addEventListener('negotiationneeded', () => void this.negotiate(peer));
     connection.addEventListener('signalingstatechange', () => {
       if (connection.signalingState === 'stable' && peer.negotiationPending) void this.negotiate(peer);
     });
@@ -215,8 +215,30 @@ export class RtcMesh {
         this.closePeer(peerId);
       }
     });
-    peer.tracksReady = this.videoTrack ? this.applyVideoBitrate(videoSender) : Promise.resolve();
     return peer;
+  }
+
+  private prepareSenders(peer: PeerState) {
+    const transceivers = peer.connection.getTransceivers();
+    const audio = transceivers.find((item) => item.receiver.track.kind === 'audio');
+    const video = transceivers.find((item) => item.receiver.track.kind === 'video');
+    const ready: Promise<unknown>[] = [];
+    if (audio) {
+      audio.direction = 'sendrecv';
+      peer.audioSender = audio.sender;
+      ready.push(audio.sender.replaceTrack(this.audioTrack));
+    } else {
+      peer.audioSender = peer.connection.addTransceiver(this.audioTrack ?? 'audio', { direction: 'sendrecv' }).sender;
+    }
+    if (video) {
+      video.direction = 'sendrecv';
+      peer.videoSender = video.sender;
+      ready.push(video.sender.replaceTrack(this.videoTrack));
+    } else {
+      peer.videoSender = peer.connection.addTransceiver(this.videoTrack ?? 'video', { direction: 'sendrecv' }).sender;
+    }
+    if (this.videoTrack && peer.videoSender) ready.push(this.applyVideoBitrate(peer.videoSender));
+    peer.tracksReady = Promise.all(ready).then(() => undefined);
   }
 
   private async applyVideoBitrate(sender: RTCRtpSender) {
