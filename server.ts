@@ -131,6 +131,9 @@ app.use(BASE_PATH || '/', express.static(publicDirectory, {
   index: false,
   extensions: ['html'],
   maxAge: 0,
+  setHeaders(response, filePath) {
+    if (/\.(?:html|js|css)$/.test(filePath)) response.setHeader('Cache-Control', 'no-store');
+  },
 }));
 app.get(route('/'), (_, response) => sendAppHtml(response, './'));
 app.get(route('/room/:roomId'), (_, response) => sendAppHtml(response, '../'));
@@ -162,6 +165,7 @@ function route(pathname: string): string {
 
 function sendAppHtml(response: Response, baseHref: string) {
   response.set('Content-Security-Policy', contentSecurityPolicy(Boolean(headHtml)));
+  response.set('Cache-Control', 'no-store');
   response.type('html').send(appHtml(baseHref));
 }
 

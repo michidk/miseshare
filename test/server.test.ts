@@ -203,6 +203,7 @@ test('serves the app and public client configuration', async () => {
   const config = await configResponse.json() as { iceServers: IceServerConfig[] };
   const favicon = await fetch(`${baseUrl}/favicon.svg`);
   const appClient = await fetch(`${baseUrl}/app.js`);
+  assert.equal(appClient.headers.get('cache-control'), 'no-store');
   const appClientSource = await appClient.text();
   const landing = await fetch(`${baseUrl}/`);
   const room = await fetch(`${baseUrl}/room/abc12345`);
@@ -230,6 +231,7 @@ test('serves the app and public client configuration', async () => {
   assert.match(appClientSource, /text-frame-chunk/);
   assert.match(appClientSource, /text-keyframe-request/);
   assert.equal(landing.status, 200);
+  assert.equal(landing.headers.get('cache-control'), 'no-store');
   assert.ok(landing.headers.get('x-request-id'));
   const landingPolicy = requiredHeader(landing, 'content-security-policy');
   const landingPage = await landing.text();
