@@ -793,8 +793,7 @@ function attachIncomingNativeStream(presenterId: string) {
   video.addEventListener('playing', connected, { once: true });
   video.requestVideoFrameCallback?.(() => connected());
   video.srcObject = stream;
-  if (stream.getVideoTracks().some((track) => track.readyState === 'live' && !track.muted)
-    || (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0)) connected();
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0) connected();
   void video.play().catch(() => {});
 }
 
@@ -905,7 +904,9 @@ function renderStreamCard(presenter: PresenterInfo) {
     visual.setAttribute('playsinline', '');
     if (visual instanceof HTMLVideoElement) {
       visual.autoplay = true;
-      visual.muted = isLocal;
+      // Audio uses a dedicated element. Muting the video sink allows playback
+      // in duplicated and background tabs without fresh user activation.
+      visual.muted = true;
     }
     const loading = document.createElement('div');
     loading.className = 'stream-connecting';

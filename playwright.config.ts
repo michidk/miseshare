@@ -35,7 +35,15 @@ export default defineConfig({
     },
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: externalBaseURL ? {
+          args: [`--unsafely-treat-insecure-origin-as-secure=${externalBaseURL}`],
+        } : undefined,
+      },
+    },
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
   ],
 });

@@ -162,6 +162,7 @@ test('the host receives a native stream started by an existing same-context tab'
 });
 
 test('an opener-cloned tab receives repeated host and participant streams', async ({ page }) => {
+  test.setTimeout(120_000);
   await page.goto('/?test');
   await page.locator('#share-button').click();
   await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
@@ -170,19 +171,25 @@ test('an opener-cloned tab receives repeated host and participant streams', asyn
   await page.evaluate(() => window.open(`${location.href}?test`, '_blank'));
   const viewer = await popupPromise;
   await expect(viewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
+  await installVisibleDisplayMedia(page);
+  await installVisibleDisplayMedia(viewer);
 
   for (let cycle = 0; cycle < 3; cycle += 1) {
     await page.bringToFront();
-    await page.locator('#test-stream-button').click();
+    await page.locator('#stream-button').click();
     await expect(viewer.locator('.stream-card video')).toHaveJSProperty('videoWidth', 1280, { timeout: 30_000 });
+    await expect(viewer.locator('.stream-card video')).toHaveJSProperty('muted', true);
+    await expect.poll(() => visibleVideoPixel(viewer.locator('.stream-card video')), { timeout: 30_000 }).toBe(true);
     await expect(viewer.locator('.stream-card')).not.toHaveClass(/connecting/, { timeout: 30_000 });
     await page.locator('#stream-button').click();
     await expect(viewer.locator('.stream-card')).toHaveCount(0);
 
     await viewer.bringToFront();
-    await viewer.locator('#test-stream-button').click();
+    await viewer.locator('#stream-button').click();
+    await expect(page.locator('.stream-card video')).toHaveJSProperty('videoWidth', 1280, { timeout: 30_000 });
+    await expect(page.locator('.stream-card video')).toHaveJSProperty('muted', true);
+    await expect.poll(() => visibleVideoPixel(page.locator('.stream-card video')), { timeout: 30_000 }).toBe(true);
     await expect(page.locator('.stream-card')).not.toHaveClass(/connecting/, { timeout: 30_000 });
-    await expect(page.locator('.stream-card video')).toHaveJSProperty('videoWidth', 1280);
     await viewer.locator('#stream-button').click();
     await expect(page.locator('.stream-card')).toHaveCount(0);
   }
@@ -213,5 +220,46 @@ async function pixelHash(locator: import('@playwright/test').Locator) {
     const pixels = context.getImageData(0, 0, 64, 64).data;
     const digest = await crypto.subtle.digest('SHA-256', pixels);
     return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
+  });
+}
+
+async function visibleVideoPixel(locator: import('@playwright/test').Locator) {
+  return locator.evaluate((video: HTMLVideoElement) => {
+    if (!video.videoWidth || !video.videoHeight) return false;
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const context = canvas.getContext('2d');
+    if (!context) return false;
+    context.drawImage(video, video.videoWidth / 2, video.videoHeight / 2, 1, 1, 0, 0, 1, 1);
+    const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+    return red + green + blue > 60;
+  });
+}
+
+async function installVisibleDisplayMedia(page: import('@playwright/test').Page) {
+  await page.evaluate(() => {
+    const mediaDevices = navigator.mediaDevices ?? {};
+    if (!navigator.mediaDevices) Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: mediaDevices });
+    Object.defineProperty(mediaDevices, 'getDisplayMedia', {
+      configurable: true,
+      value: async () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1280;
+        canvas.height = 720;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Canvas rendering is unavailable.');
+        let frame = 0;
+        const draw = () => {
+          context.fillStyle = `hsl(${frame++ % 360} 72% 48%)`;
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.fillStyle = 'white';
+          context.fillRect(540, 310, 200, 100);
+        };
+        draw();
+        window.setInterval(draw, 50);
+        return canvas.captureStream(20);
+      },
+    });
   });
 }
