@@ -176,6 +176,8 @@ let viewerControl: RtcChannel | undefined;
 let localPresentation: LocalPresentation | undefined;
 let syntheticStreamTimer: number | undefined;
 let shareAudioEnabled = false;
+let audioCapturePending = false;
+let additionalAudioCapture: MediaStream | undefined;
 let currentStreamSettings: RoomStreamSettings = { ...qualityPresets['720p'] };
 let rtcConfig: RTCConfiguration = {
   iceServers: [{ urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'] }],
@@ -697,6 +699,7 @@ async function beginLocalPresentation(stream: MediaStream) {
     throw error;
   }
   await localPresentation.start();
+  for (const track of localAudioTracks()) track.onended = () => handleLocalAudioEnded(track);
   const presenter = localPresenterInfo();
   upsertPresenter(presenter);
   attachLocalPreview(stream, presenter.id);
@@ -836,6 +839,7 @@ function stopLocalPresentation() {
 function disposeLocalPresentation() {
   const presentation = localPresentation;
   localPresentation = undefined;
+  stopAdditionalAudioCapture();
   presentation?.stop();
   if (syntheticStreamTimer !== undefined) window.clearInterval(syntheticStreamTimer);
   syntheticStreamTimer = undefined;
@@ -853,11 +857,23 @@ function localAudioTracks() {
   return localPresentation?.audioTracks() || [];
 }
 
-function toggleLocalAudio() {
-  const tracks = localAudioTracks();
-  if (!tracks.length) return;
-  const enabled = !tracks.some((track) => track.enabled);
-  localPresentation?.setAudioEnabled(enabled);
+async function captureAdditionalAudio() {
+  if (!navigator.mediaDevices?.getDisplayMedia) throw new Error('Audio sharing is not supported in this browser.');
+  const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  if (!stream.getAudioTracks().some((track) => track.readyState === 'live')) {
+    stopMediaStream(stream);
+    throw new Error('Audio was not available for the selected screen. Enable audio in the browser picker.');
+  }
+  return stream;
+}
+
+function stopAdditionalAudioCapture(capture = additionalAudioCapture) {
+  if (!capture) return;
+  if (additionalAudioCapture === capture) additionalAudioCapture = undefined;
+  stopMediaStream(capture);
+}
+
+function publishLocalAudioState(enabled: boolean) {
   const presenter = localPresenterInfo();
   upsertPresenter(presenter);
   if (session.isHost) {
@@ -866,6 +882,69 @@ function toggleLocalAudio() {
   } else {
     viewerControl?.send({ type: 'audio-changed', audioEnabled: enabled });
   }
+}
+
+function handleLocalAudioEnded(track: MediaStreamTrack) {
+  const presentation = localPresentation;
+  if (!presentation || !presentation.stream.getTracks().includes(track)) return;
+  const wasEnabled = track.enabled;
+  track.onended = null;
+  presentation.stream.removeTrack(track);
+  if (additionalAudioCapture?.getTracks().includes(track)) stopAdditionalAudioCapture();
+  void mesh?.setAudioTrack(localAudioTracks()[0] ?? null);
+  if (wasEnabled) publishLocalAudioState(false);
+  updateRoomUI();
+  updateBandwidthEstimate();
+  if (wasEnabled) showToast('Stream audio ended.');
+}
+
+async function startLocalAudio() {
+  const presentation = localPresentation;
+  if (!presentation || audioCapturePending) return;
+  audioCapturePending = true;
+  updateRoomUI();
+  showToast('Select a tab or screen and enable audio in the browser picker.');
+  let capture: MediaStream | undefined;
+  let track: MediaStreamTrack | undefined;
+  try {
+    capture = await captureAdditionalAudio();
+    track = capture.getAudioTracks().find((candidate) => candidate.readyState === 'live');
+    if (!track) throw new Error('Audio ended before it could be shared.');
+    if (localPresentation !== presentation) {
+      stopAdditionalAudioCapture(capture);
+      return;
+    }
+    additionalAudioCapture = capture;
+    presentation.stream.addTrack(track);
+    track.onended = () => handleLocalAudioEnded(track as MediaStreamTrack);
+    await mesh?.setAudioTrack(track);
+    setShareAudio(true);
+    publishLocalAudioState(true);
+    updateBandwidthEstimate();
+    showToast('Stream audio started.');
+  } catch (error) {
+    if (track && presentation.stream.getTracks().includes(track)) {
+      track.onended = null;
+      presentation.stream.removeTrack(track);
+      await mesh?.setAudioTrack(null);
+    }
+    if (capture) stopAdditionalAudioCapture(capture);
+    if (errorName(error) !== 'NotAllowedError') showToast(errorMessage(error, 'Could not start stream audio.'), 'error');
+  } finally {
+    audioCapturePending = false;
+    updateRoomUI();
+  }
+}
+
+async function toggleLocalAudio() {
+  const tracks = localAudioTracks();
+  if (!tracks.length) {
+    await startLocalAudio();
+    return;
+  }
+  const enabled = !tracks.some((track) => track.enabled);
+  localPresentation?.setAudioEnabled(enabled);
+  publishLocalAudioState(enabled);
   updateRoomUI();
   updateBandwidthEstimate();
   showToast(enabled ? 'Stream audio resumed.' : 'Stream audio stopped.');
@@ -1050,10 +1129,11 @@ function updateRoomUI() {
   const audioButton = $('#local-audio-button');
   const hasAudio = localAudioTracks().length > 0;
   const audioEnabled = localAudioTracks().some((track) => track.enabled);
-  audioButton.hidden = !sharing || !hasAudio;
+  audioButton.hidden = !sharing;
+  audioButton.disabled = audioCapturePending;
   audioButton.classList.toggle('muted', hasAudio && !audioEnabled);
   const label = audioButton.querySelector('span');
-  if (label) label.textContent = audioEnabled ? 'Stop audio' : 'Resume audio';
+  if (label) label.textContent = audioCapturePending ? 'Opening audio…' : !hasAudio ? 'Start audio' : audioEnabled ? 'Stop audio' : 'Resume audio';
   updateDropAvailability();
 }
 
@@ -2516,7 +2596,7 @@ function errorMessage(error: unknown, fallback: string) {
 $('#share-button').addEventListener('click', startRoom);
 $('#stream-button').addEventListener('click', () => localPresentation ? stopLocalPresentation() : startRoomPresentation());
 $('#test-stream-button').addEventListener('click', () => void startSyntheticPresentation());
-$('#local-audio-button').addEventListener('click', toggleLocalAudio);
+$('#local-audio-button').addEventListener('click', () => void toggleLocalAudio());
 $('#leave-room-button').addEventListener('click', () => void leaveRoom());
 window.addEventListener('pagehide', handlePageDeparture);
 window.addEventListener('beforeunload', () => handlePageDeparture());

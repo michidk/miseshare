@@ -147,6 +147,54 @@ test('an existing same-context tab receives a native stream started by the host'
   await viewer.close();
 });
 
+test('stream audio can be started, stopped, and resumed during a screen share', async ({ page }) => {
+  await page.goto('/?test');
+  await page.locator('#share-button').click();
+  await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
+  const viewer = await page.context().newPage();
+  await viewer.goto(page.url());
+  await expect(viewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
+  await page.locator('#test-stream-button').click();
+  await expect(page.locator('#local-audio-button')).toHaveText('Start audio');
+  await expect(viewer.locator('.stream-card .audio-state')).toHaveText('No audio');
+
+  await page.evaluate(() => {
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const destination = context.createMediaStreamDestination();
+    oscillator.connect(destination);
+    oscillator.start();
+    const canvas = document.createElement('canvas');
+    const videoTrack = canvas.captureStream(1).getVideoTracks()[0];
+    const audioTrack = destination.stream.getAudioTracks()[0];
+    const mediaDevices = navigator.mediaDevices ?? {};
+    if (!navigator.mediaDevices) Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: mediaDevices });
+    Object.defineProperty(mediaDevices, 'getDisplayMedia', {
+      configurable: true,
+      value: async () => {
+        const state = window as unknown as { audioPickerCalls?: number };
+        state.audioPickerCalls = (state.audioPickerCalls ?? 0) + 1;
+        return new MediaStream([videoTrack, audioTrack]);
+      },
+    });
+  });
+
+  await page.locator('#local-audio-button').click();
+  await expect(page.locator('#local-audio-button')).toHaveText('Stop audio');
+  await expect(page.locator('#your-stream-status')).toContainText('audio on');
+  await expect(viewer.locator('.stream-card .audio-state')).toHaveText('Audio on');
+  await page.locator('#local-audio-button').click();
+  await expect(page.locator('#local-audio-button')).toHaveText('Resume audio');
+  await expect(page.locator('#your-stream-status')).toContainText('audio off');
+  await expect(viewer.locator('.stream-card .audio-state')).toHaveText('No audio');
+  await page.locator('#local-audio-button').click();
+  await expect(page.locator('#local-audio-button')).toHaveText('Stop audio');
+  await expect(page.locator('#your-stream-status')).toContainText('audio on');
+  await expect(viewer.locator('.stream-card .audio-state')).toHaveText('Audio on');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { audioPickerCalls?: number }).audioPickerCalls)).toBe(1);
+  await viewer.close();
+});
+
 test('the host receives a native stream started by an existing same-context tab', async ({ page }) => {
   await page.goto('/?test');
   await page.locator('#share-button').click();
