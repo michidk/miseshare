@@ -1132,8 +1132,12 @@ function updateRoomUI() {
   audioButton.hidden = !sharing;
   audioButton.disabled = audioCapturePending;
   audioButton.classList.toggle('muted', hasAudio && !audioEnabled);
+  audioButton.classList.toggle('needs-audio', sharing && !hasAudio);
+  const audioAction = audioCapturePending ? 'Opening audio…' : !hasAudio ? 'Start audio' : audioEnabled ? 'Stop audio' : 'Resume audio';
+  audioButton.setAttribute('aria-label', audioAction);
+  audioButton.title = audioAction;
   const label = audioButton.querySelector('span');
-  if (label) label.textContent = audioCapturePending ? 'Opening audio…' : !hasAudio ? 'Start audio' : audioEnabled ? 'Stop audio' : 'Resume audio';
+  if (label) label.textContent = audioAction;
   updateDropAvailability();
 }
 

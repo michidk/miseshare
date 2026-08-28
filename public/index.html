@@ -185,7 +185,13 @@
               <span>Include audio</span>
             </label>
             <button id="local-audio-button" class="button audio-control-button" type="button" hidden>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6.5 9H3v6h3.5L11 19V5ZM15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/></svg><span>Start audio</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M11 5 6.5 9H3v6h3.5L11 19V5Z"/>
+                <path class="audio-control-waves" d="M15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/>
+                <path class="audio-control-muted-line" d="m4 4 16 16"/>
+                <path class="audio-control-add" d="M18 4v6M15 7h6"/>
+              </svg>
+              <span class="sr-only">Start audio</span>
             </button>
             <div class="quality-settings">
               <button id="quality-button" class="quality-button" data-quality-trigger type="button" aria-expanded="false" aria-controls="quality-menu">
