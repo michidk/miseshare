@@ -146,6 +146,24 @@ test('an existing participant receives a native stream started by the host', asy
   await viewerContext.close();
 });
 
+test('the host receives a native stream started by an existing participant', async ({ browser, page }) => {
+  await page.goto('/?test');
+  await page.locator('#share-button').click();
+  await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
+
+  const viewerContext = await browser.newContext();
+  const viewer = await viewerContext.newPage();
+  await viewer.goto(`${page.url()}?test`);
+  await expect(viewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
+  await expect(viewer.locator('#test-stream-button')).toBeEnabled();
+
+  await viewer.locator('#test-stream-button').click();
+  const remoteCard = page.locator('.stream-card');
+  await expect(remoteCard).not.toHaveClass(/connecting/, { timeout: 30_000 });
+  await expect(remoteCard.locator('video')).toHaveJSProperty('videoWidth', 1280);
+  await viewerContext.close();
+});
+
 test('landing page does not overflow a mobile viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');

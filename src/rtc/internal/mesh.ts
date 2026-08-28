@@ -7,6 +7,7 @@ interface PeerState extends RtcPeerChannels {
   audioSender: RTCRtpSender;
   videoSender: RTCRtpSender;
   makingOffer: boolean;
+  negotiationPending: boolean;
   ignoreOffer: boolean;
   settingRemoteAnswer: boolean;
   pendingCandidates: RTCIceCandidateInit[];
@@ -125,7 +126,10 @@ export class RtcMesh {
 
   async setAudioTrack(track: MediaStreamTrack | null) {
     this.audioTrack = track;
-    await Promise.all([...this.peers.values()].map((peer) => peer.audioSender.replaceTrack(track)));
+    await Promise.all([...this.peers.values()].map(async (peer) => {
+      await peer.audioSender.replaceTrack(track);
+      await this.negotiate(peer);
+    }));
   }
 
   async setVideoTrack(track: MediaStreamTrack | null, bitrate?: number) {
@@ -177,6 +181,7 @@ export class RtcMesh {
       audioSender,
       videoSender,
       makingOffer: false,
+      negotiationPending: false,
       ignoreOffer: false,
       settingRemoteAnswer: false,
       pendingCandidates: [],
@@ -189,6 +194,9 @@ export class RtcMesh {
       if (event.candidate) void this.send(peerId, 'candidate', event.candidate.toJSON());
     });
     connection.addEventListener('negotiationneeded', () => void this.negotiate(peer));
+    connection.addEventListener('signalingstatechange', () => {
+      if (connection.signalingState === 'stable' && peer.negotiationPending) void this.negotiate(peer);
+    });
     connection.addEventListener('track', (event) => this.events.mediaTrack?.(peerId, event.track, event.streams));
     connection.addEventListener('connectionstatechange', () => {
       const state = connection.connectionState;
@@ -220,9 +228,14 @@ export class RtcMesh {
   }
 
   private async negotiate(peer: PeerState) {
-    if (this.closed || peer.makingOffer || peer.connection.signalingState !== 'stable') return;
+    if (this.closed || !this.peers.has(peer.peerId)) return;
+    if (peer.makingOffer || peer.connection.signalingState !== 'stable') {
+      peer.negotiationPending = true;
+      return;
+    }
     try {
       peer.makingOffer = true;
+      peer.negotiationPending = false;
       await peer.tracksReady;
       await peer.connection.setLocalDescription();
       await this.send(peer.peerId, 'description', peer.connection.localDescription?.toJSON());
@@ -230,6 +243,7 @@ export class RtcMesh {
       this.events.error?.(peer.peerId, asError(error));
     } finally {
       peer.makingOffer = false;
+      if (peer.negotiationPending && peer.connection.signalingState === 'stable') queueMicrotask(() => void this.negotiate(peer));
     }
   }
 
