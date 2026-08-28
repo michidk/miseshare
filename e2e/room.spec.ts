@@ -95,7 +95,9 @@ test('lossless text mode renders a multi-chunk frame pixel-exactly', async ({ br
     for (let index = 3; index < image.data.length; index += 4) image.data[index] = 255;
     context.putImageData(image, 0, 0);
     const stream = canvas.captureStream(6);
-    Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', { configurable: true, value: async () => stream });
+    const mediaDevices = navigator.mediaDevices ?? {};
+    if (!navigator.mediaDevices) Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: mediaDevices });
+    Object.defineProperty(mediaDevices, 'getDisplayMedia', { configurable: true, value: async () => stream });
     (window as unknown as { textTestStream: MediaStream }).textTestStream = stream;
   });
 
@@ -105,6 +107,7 @@ test('lossless text mode renders a multi-chunk frame pixel-exactly', async ({ br
   await expect(remoteCard).not.toHaveClass(/connecting/, { timeout: 30_000 });
   await expect(remoteCanvas).toHaveJSProperty('width', 1280);
   await expect(remoteCanvas).toHaveJSProperty('height', 720);
+  await expect(remoteCard.locator('.stream-person small')).toHaveText('Native resolution (1280 × 720) · 6 fps · lossless');
 
   const publisherHash = await pixelHash(page.locator('.stream-card video'));
   const viewerHash = await pixelHash(remoteCanvas);
@@ -208,7 +211,7 @@ test('landing page does not overflow a mobile viewport', async ({ page }) => {
 });
 
 async function pixelHash(locator: import('@playwright/test').Locator) {
-  return locator.evaluate(async (source: HTMLCanvasElement | HTMLVideoElement) => {
+  return locator.evaluate((source: HTMLCanvasElement | HTMLVideoElement) => {
     const width = source instanceof HTMLVideoElement ? source.videoWidth : source.width;
     const height = source instanceof HTMLVideoElement ? source.videoHeight : source.height;
     const canvas = document.createElement('canvas');
@@ -218,8 +221,7 @@ async function pixelHash(locator: import('@playwright/test').Locator) {
     if (!context) throw new Error('Canvas rendering is unavailable.');
     context.drawImage(source, 0, 0);
     const pixels = context.getImageData(0, 0, 64, 64).data;
-    const digest = await crypto.subtle.digest('SHA-256', pixels);
-    return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
+    return btoa(String.fromCharCode(...pixels));
   });
 }
 

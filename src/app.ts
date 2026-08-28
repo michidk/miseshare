@@ -696,10 +696,10 @@ async function beginLocalPresentation(stream: MediaStream) {
     stopMediaStream(stream);
     throw error;
   }
+  await localPresentation.start();
   const presenter = localPresenterInfo();
   upsertPresenter(presenter);
   attachLocalPreview(stream, presenter.id);
-  await localPresentation.start();
   await mesh.setAudioTrack(localAudioTracks()[0] ?? null);
   await syncNativeVideoTrack();
 
@@ -711,7 +711,7 @@ async function beginLocalPresentation(stream: MediaStream) {
   } else if (viewerControl?.open) {
     viewerControl.send({
       type: 'stream-started',
-      streamSettings: currentStreamSettings,
+      streamSettings: presenter.settings,
       audioEnabled: presenter.audioEnabled,
     });
   } else {
@@ -721,12 +721,19 @@ async function beginLocalPresentation(stream: MediaStream) {
 }
 
 function localPresenterInfo(): PresenterInfo {
+  const settings: RoomStreamSettings = { ...currentStreamSettings };
+  if (settings.codec === TEXT_CODEC_ID) {
+    const capture = localPresentation?.videoTrack?.getSettings();
+    const width = capture?.width;
+    const height = capture?.height;
+    if (width && height) settings.label = `Native resolution (${width} × ${height}) · ${settings.frameRate} fps · lossless`;
+  }
   return {
     id: signaling?.participantId || '',
     name: session.isHost ? 'Host' : session.viewerName || 'You',
     isHost: session.isHost,
     audioEnabled: localAudioTracks().some((track) => track.enabled),
-    settings: { ...currentStreamSettings },
+    settings,
   };
 }
 
@@ -1761,7 +1768,7 @@ async function setQuality(name: QualityName, customSettings?: NativeVideoSetting
       broadcast({ type: 'stream-settings', presenter });
       announceSystem('Host', `changed stream settings to ${settings.buttonLabel} (${settings.label}).`, 'settings');
     } else {
-      viewerControl?.send({ type: 'settings-changed', streamSettings: settings });
+      viewerControl?.send({ type: 'settings-changed', streamSettings: presenter.settings });
     }
   } else if (!room.hidden) {
     if (session.isHost) {
