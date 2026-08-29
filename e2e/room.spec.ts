@@ -195,6 +195,78 @@ test('stream audio can be started, stopped, and resumed during a screen share', 
   await viewer.close();
 });
 
+test('microphone and screen audio can be shared and stopped independently', async ({ page }) => {
+  await page.goto('/?test');
+  await page.locator('#share-button').click();
+  await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
+  const viewer = await page.context().newPage();
+  await viewer.goto(page.url());
+  await expect(viewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
+  await page.locator('#test-stream-button').click();
+  await expect(page.locator('#local-microphone-button')).toHaveAttribute('title', 'Share microphone');
+
+  await page.evaluate(() => {
+    const microphoneContext = new AudioContext();
+    const microphoneOscillator = microphoneContext.createOscillator();
+    const microphoneDestination = microphoneContext.createMediaStreamDestination();
+    microphoneOscillator.connect(microphoneDestination);
+    microphoneOscillator.start();
+
+    const screenContext = new AudioContext();
+    const screenOscillator = screenContext.createOscillator();
+    const screenDestination = screenContext.createMediaStreamDestination();
+    screenOscillator.connect(screenDestination);
+    screenOscillator.start();
+    const canvas = document.createElement('canvas');
+    const videoTrack = canvas.captureStream(1).getVideoTracks()[0];
+
+    const mediaDevices = navigator.mediaDevices ?? {};
+    if (!navigator.mediaDevices) Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: mediaDevices });
+    Object.defineProperty(mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: async (constraints: MediaStreamConstraints) => {
+        const state = window as unknown as { microphoneConstraints?: MediaStreamConstraints; microphonePickerCalls?: number; microphoneTrack?: MediaStreamTrack };
+        state.microphoneConstraints = constraints;
+        state.microphonePickerCalls = (state.microphonePickerCalls ?? 0) + 1;
+        state.microphoneTrack = microphoneDestination.stream.getAudioTracks()[0];
+        return new MediaStream([state.microphoneTrack]);
+      },
+    });
+    Object.defineProperty(mediaDevices, 'getDisplayMedia', {
+      configurable: true,
+      value: async () => new MediaStream([videoTrack, screenDestination.stream.getAudioTracks()[0]]),
+    });
+  });
+
+  await page.locator('#local-microphone-button').click();
+  await expect(page.locator('#local-microphone-button')).toHaveAttribute('title', 'Stop sharing microphone');
+  await expect(page.locator('#your-stream-status')).toContainText('mic on');
+  await expect(viewer.locator('.stream-card .audio-state')).toHaveText('Audio on');
+
+  await page.locator('#local-audio-button').click();
+  await expect(page.locator('#your-stream-status')).toContainText('audio + mic on');
+  await expect(viewer.locator('.stream-card .audio-state')).toHaveText('Audio on');
+  await page.locator('#local-audio-button').click();
+  await expect(page.locator('#your-stream-status')).toContainText('mic on');
+  await expect(viewer.locator('.stream-card .audio-state')).toHaveText('Audio on');
+
+  await page.locator('#local-microphone-button').click();
+  await expect(page.locator('#local-microphone-button')).toHaveAttribute('title', 'Share microphone');
+  await expect(page.locator('#your-stream-status')).toContainText('audio off');
+  await expect(viewer.locator('.stream-card .audio-state')).toHaveText('No audio');
+  const microphoneCapture = await page.evaluate(() => {
+    const state = window as unknown as { microphoneConstraints?: MediaStreamConstraints; microphonePickerCalls?: number; microphoneTrack?: MediaStreamTrack };
+    return { calls: state.microphonePickerCalls, constraints: state.microphoneConstraints, trackState: state.microphoneTrack?.readyState };
+  });
+  expect(microphoneCapture.calls).toBe(1);
+  expect(microphoneCapture.trackState).toBe('ended');
+  expect(microphoneCapture.constraints).toEqual({
+    audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true },
+    video: false,
+  });
+  await viewer.close();
+});
+
 test('the host receives a native stream started by an existing same-context tab', async ({ page }) => {
   await page.goto('/?test');
   await page.locator('#share-button').click();

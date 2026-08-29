@@ -427,13 +427,15 @@ h1, h2, p { margin-top: 0; }
 .stop-button { min-height: 44px; padding: 0 17px; border: 1px solid rgba(239,78,78,.22); color: #d94545; background: rgba(255,255,255,.66); box-shadow: none; font-size: 12px; }
 .stop-button:hover { background: white; }
 .stop-button span { width: 9px; height: 9px; border-radius: 2px; background: var(--red); }
-.audio-control-button { min-height: 44px; padding: 0 15px; border: 1px solid var(--line); color: #62646c; background: rgba(255,255,255,.66); box-shadow: none; font-size: 11px; }
-.audio-control-button:hover { background: white; }
-.audio-control-button svg { width: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.audio-control-button, .microphone-control-button { min-height: 44px; padding: 0 15px; border: 1px solid var(--line); color: #62646c; background: rgba(255,255,255,.66); box-shadow: none; font-size: 11px; }
+.audio-control-button:hover, .microphone-control-button:hover { background: white; }
+.audio-control-button svg, .microphone-control-button svg { width: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .audio-control-button.muted { color: #d94545; border-color: rgba(239,78,78,.22); }
 .audio-control-button .audio-control-muted-line, .audio-control-button .audio-control-add { display: none; }
 .audio-control-button.muted .audio-control-waves, .audio-control-button.needs-audio .audio-control-waves { display: none; }
 .audio-control-button.muted .audio-control-muted-line, .audio-control-button.needs-audio .audio-control-add { display: block; }
+.microphone-control-button.active { color: var(--blue); border-color: rgba(49,88,245,.25); background: rgba(49,88,245,.08); }
+.microphone-control-button.active .microphone-control-add { display: none; }
 
 .room-sidebar { height: min(660px, calc(100vh - 120px)); min-height: 580px; margin-top: 70px; display: flex; flex-direction: column; gap: 14px; }
 .share-panel { padding: 19px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,254,250,.78); box-shadow: 0 16px 45px rgba(43,39,30,.07); }
@@ -726,7 +728,7 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 .stream-control-copy span { color: #8c8d91; font-size: 8px; font-weight: 780; letter-spacing: .08em; text-transform: uppercase; }
 .stream-control-copy strong { color: #55575e; font-size: 10px; }
 .stream-controls .audio-option-compact { flex: 0 0 auto; background: rgba(255,255,255,.62); }
-.stream-controls .audio-control-button { width: 38px; min-height: 38px; padding: 0; justify-content: center; background: rgba(255,255,255,.68); }
+.stream-controls .audio-control-button, .stream-controls .microphone-control-button { width: 38px; min-height: 38px; padding: 0; justify-content: center; background: rgba(255,255,255,.68); }
 .test-stream-button { min-height: 38px; padding: 0 11px; border-style: dashed; color: #59627d; background: rgba(255,255,255,.68); font-size: 9px; }
 .stream-button { min-height: 40px; padding: 0 14px; font-size: 10px; }
 .stream-button.stop-stream { color: #d94545; border: 1px solid rgba(239,78,78,.2); background: white; box-shadow: none; }

@@ -48,6 +48,13 @@ interface LocalPresentation {
   stop(stopTracks?: boolean): void;
 }
 
+interface LocalAudioMix {
+  context: AudioContext;
+  destination: MediaStreamAudioDestinationNode;
+  sources: MediaStreamAudioSourceNode[];
+  track: MediaStreamTrack;
+}
+
 interface ViewerEntry {
   control: RtcChannel;
   name: string;
@@ -178,6 +185,9 @@ let syntheticStreamTimer: number | undefined;
 let shareAudioEnabled = false;
 let audioCapturePending = false;
 let additionalAudioCapture: MediaStream | undefined;
+let microphoneCapturePending = false;
+let localMicrophoneCapture: MediaStream | undefined;
+let localAudioMix: LocalAudioMix | undefined;
 let currentStreamSettings: RoomStreamSettings = { ...qualityPresets['720p'] };
 let rtcConfig: RTCConfiguration = {
   iceServers: [{ urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'] }],
@@ -699,11 +709,11 @@ async function beginLocalPresentation(stream: MediaStream) {
     throw error;
   }
   await localPresentation.start();
-  for (const track of localAudioTracks()) track.onended = () => handleLocalAudioEnded(track);
+  for (const track of localSystemAudioTracks()) track.onended = () => void handleLocalSystemAudioEnded(track);
   const presenter = localPresenterInfo();
   upsertPresenter(presenter);
   attachLocalPreview(stream, presenter.id);
-  await mesh.setAudioTrack(localAudioTracks()[0] ?? null);
+  await syncOutgoingLocalAudio();
   await syncNativeVideoTrack();
 
   if (session.isHost) {
@@ -735,7 +745,7 @@ function localPresenterInfo(): PresenterInfo {
     id: signaling?.participantId || '',
     name: session.isHost ? 'Host' : session.viewerName || 'You',
     isHost: session.isHost,
-    audioEnabled: localAudioTracks().some((track) => track.enabled),
+    audioEnabled: localAudioIsEnabled(),
     settings,
   };
 }
@@ -839,6 +849,8 @@ function stopLocalPresentation() {
 function disposeLocalPresentation() {
   const presentation = localPresentation;
   localPresentation = undefined;
+  stopLocalAudioMix();
+  stopLocalMicrophoneCapture();
   stopAdditionalAudioCapture();
   presentation?.stop();
   if (syntheticStreamTimer !== undefined) window.clearInterval(syntheticStreamTimer);
@@ -853,8 +865,71 @@ function stopMediaStream(stream: MediaStream) {
   }
 }
 
-function localAudioTracks() {
+function localSystemAudioTracks() {
   return localPresentation?.audioTracks() || [];
+}
+
+function localMicrophoneTracks() {
+  return localMicrophoneCapture?.getAudioTracks().filter((track) => track.readyState === 'live') || [];
+}
+
+function localAudioSourceTracks() {
+  return [...localSystemAudioTracks(), ...localMicrophoneTracks()];
+}
+
+function localAudioIsEnabled() {
+  return localAudioSourceTracks().some((track) => track.enabled);
+}
+
+function localAudioStatus() {
+  const systemAudio = localSystemAudioTracks().some((track) => track.enabled);
+  const microphone = localMicrophoneTracks().some((track) => track.enabled);
+  if (systemAudio && microphone) return 'audio + mic on';
+  if (microphone) return 'mic on';
+  if (systemAudio) return 'audio on';
+  return 'audio off';
+}
+
+function stopLocalAudioMix() {
+  const mix = localAudioMix;
+  localAudioMix = undefined;
+  if (!mix) return;
+  for (const source of mix.sources) source.disconnect();
+  mix.destination.disconnect();
+  mix.track.stop();
+  void mix.context.close().catch(() => {});
+}
+
+async function syncOutgoingLocalAudio() {
+  const tracks = localAudioSourceTracks();
+  stopLocalAudioMix();
+  if (tracks.length < 2) {
+    await mesh?.setAudioTrack(tracks[0] ?? null);
+    return;
+  }
+
+  const context = new AudioContext({ latencyHint: 'interactive' });
+  const destination = context.createMediaStreamDestination();
+  const sources: MediaStreamAudioSourceNode[] = [];
+  try {
+    for (const track of tracks) {
+      const source = context.createMediaStreamSource(new MediaStream([track]));
+      source.connect(destination);
+      sources.push(source);
+    }
+    const track = destination.stream.getAudioTracks()[0];
+    if (!track) throw new Error('Could not create a mixed audio track.');
+    localAudioMix = { context, destination, sources, track };
+    await context.resume();
+    await mesh?.setAudioTrack(track);
+  } catch (error) {
+    for (const source of sources) source.disconnect();
+    destination.disconnect();
+    for (const track of destination.stream.getTracks()) track.stop();
+    void context.close().catch(() => {});
+    if (localAudioMix?.context === context) localAudioMix = undefined;
+    throw error;
+  }
 }
 
 async function captureAdditionalAudio() {
@@ -873,29 +948,32 @@ function stopAdditionalAudioCapture(capture = additionalAudioCapture) {
   stopMediaStream(capture);
 }
 
-function publishLocalAudioState(enabled: boolean) {
+function publishLocalAudioState() {
   const presenter = localPresenterInfo();
+  const previous = presenters.get(presenter.id);
   upsertPresenter(presenter);
+  if (previous?.audioEnabled === presenter.audioEnabled) return;
   if (session.isHost) {
     broadcast({ type: 'stream-audio', presenter });
-    announceSystem('Host', enabled ? 'resumed stream audio.' : 'stopped sending stream audio.', 'audio');
+    announceSystem('Host', presenter.audioEnabled ? 'resumed stream audio.' : 'stopped sending stream audio.', 'audio');
   } else {
-    viewerControl?.send({ type: 'audio-changed', audioEnabled: enabled });
+    viewerControl?.send({ type: 'audio-changed', audioEnabled: presenter.audioEnabled });
   }
 }
 
-function handleLocalAudioEnded(track: MediaStreamTrack) {
+async function handleLocalSystemAudioEnded(track: MediaStreamTrack) {
   const presentation = localPresentation;
   if (!presentation || !presentation.stream.getTracks().includes(track)) return;
   const wasEnabled = track.enabled;
   track.onended = null;
   presentation.stream.removeTrack(track);
   if (additionalAudioCapture?.getTracks().includes(track)) stopAdditionalAudioCapture();
-  void mesh?.setAudioTrack(localAudioTracks()[0] ?? null);
-  if (wasEnabled) publishLocalAudioState(false);
+  try { await syncOutgoingLocalAudio(); }
+  catch (error) { showToast(errorMessage(error, 'Could not update stream audio.'), 'error'); }
+  publishLocalAudioState();
   updateRoomUI();
   updateBandwidthEstimate();
-  if (wasEnabled) showToast('Stream audio ended.');
+  if (wasEnabled) showToast('Screen audio ended.');
 }
 
 async function startLocalAudio() {
@@ -916,19 +994,19 @@ async function startLocalAudio() {
     }
     additionalAudioCapture = capture;
     presentation.stream.addTrack(track);
-    track.onended = () => handleLocalAudioEnded(track as MediaStreamTrack);
-    await mesh?.setAudioTrack(track);
+    track.onended = () => void handleLocalSystemAudioEnded(track as MediaStreamTrack);
+    await syncOutgoingLocalAudio();
     setShareAudio(true);
-    publishLocalAudioState(true);
+    publishLocalAudioState();
     updateBandwidthEstimate();
     showToast('Stream audio started.');
   } catch (error) {
     if (track && presentation.stream.getTracks().includes(track)) {
       track.onended = null;
       presentation.stream.removeTrack(track);
-      await mesh?.setAudioTrack(null);
     }
     if (capture) stopAdditionalAudioCapture(capture);
+    try { await syncOutgoingLocalAudio(); } catch {}
     if (errorName(error) !== 'NotAllowedError') showToast(errorMessage(error, 'Could not start stream audio.'), 'error');
   } finally {
     audioCapturePending = false;
@@ -937,17 +1015,89 @@ async function startLocalAudio() {
 }
 
 async function toggleLocalAudio() {
-  const tracks = localAudioTracks();
+  const tracks = localSystemAudioTracks();
   if (!tracks.length) {
     await startLocalAudio();
     return;
   }
   const enabled = !tracks.some((track) => track.enabled);
   localPresentation?.setAudioEnabled(enabled);
-  publishLocalAudioState(enabled);
+  publishLocalAudioState();
   updateRoomUI();
   updateBandwidthEstimate();
-  showToast(enabled ? 'Stream audio resumed.' : 'Stream audio stopped.');
+  showToast(enabled ? 'Screen audio resumed.' : 'Screen audio stopped.');
+}
+
+function stopLocalMicrophoneCapture(capture = localMicrophoneCapture) {
+  if (!capture) return;
+  if (localMicrophoneCapture === capture) localMicrophoneCapture = undefined;
+  stopMediaStream(capture);
+}
+
+async function handleLocalMicrophoneEnded(track: MediaStreamTrack) {
+  const capture = localMicrophoneCapture;
+  if (!capture || !capture.getTracks().includes(track)) return;
+  stopLocalMicrophoneCapture(capture);
+  try { await syncOutgoingLocalAudio(); }
+  catch (error) { showToast(errorMessage(error, 'Could not update microphone audio.'), 'error'); }
+  publishLocalAudioState();
+  updateRoomUI();
+  updateBandwidthEstimate();
+  showToast('Microphone sharing ended.');
+}
+
+async function startLocalMicrophone() {
+  const presentation = localPresentation;
+  if (!presentation || microphoneCapturePending || localMicrophoneTracks().length) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showToast('Microphone sharing is not supported in this browser.', 'error');
+    return;
+  }
+  microphoneCapturePending = true;
+  updateRoomUI();
+  let capture: MediaStream | undefined;
+  try {
+    capture = await navigator.mediaDevices.getUserMedia({
+      audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true },
+      video: false,
+    });
+    const track = capture.getAudioTracks().find((candidate) => candidate.readyState === 'live');
+    if (!track) throw new Error('No microphone audio was available.');
+    if (localPresentation !== presentation) {
+      stopLocalMicrophoneCapture(capture);
+      return;
+    }
+    track.contentHint = 'speech';
+    localMicrophoneCapture = capture;
+    track.onended = () => void handleLocalMicrophoneEnded(track);
+    await syncOutgoingLocalAudio();
+    publishLocalAudioState();
+    updateBandwidthEstimate();
+    showToast('Microphone sharing started.');
+  } catch (error) {
+    if (capture) stopLocalMicrophoneCapture(capture);
+    try { await syncOutgoingLocalAudio(); } catch {}
+    if (errorName(error) !== 'NotAllowedError') showToast(errorMessage(error, 'Could not share the microphone.'), 'error');
+  } finally {
+    microphoneCapturePending = false;
+    updateRoomUI();
+  }
+}
+
+async function stopLocalMicrophone() {
+  if (!localMicrophoneCapture || microphoneCapturePending) return;
+  stopLocalMicrophoneCapture();
+  try { await syncOutgoingLocalAudio(); }
+  catch (error) { showToast(errorMessage(error, 'Could not stop microphone sharing.'), 'error'); }
+  publishLocalAudioState();
+  updateRoomUI();
+  updateBandwidthEstimate();
+  showToast('Microphone sharing stopped.');
+}
+
+async function toggleLocalMicrophone() {
+  if (localMicrophoneTracks().length) await stopLocalMicrophone();
+  else await startLocalMicrophone();
 }
 
 function upsertPresenter(presenter: PresenterInfo) {
@@ -1123,12 +1273,12 @@ function updateRoomUI() {
   const testStreamButton = $<HTMLButtonElement>('#test-stream-button');
   testStreamButton.disabled = sharing || session.presentationPending || session.ended || (!session.isHost && !viewerControl?.open);
   $('#your-stream-status').textContent = sharing
-    ? `${currentStreamSettings.buttonLabel} · ${localAudioTracks().some((track) => track.enabled) ? 'audio on' : 'audio off'}`
+    ? `${currentStreamSettings.buttonLabel} · ${localAudioStatus()}`
     : session.presentationPending ? 'Starting…' : 'Not sharing';
   $('#share-audio-option').hidden = sharing;
   const audioButton = $('#local-audio-button');
-  const hasAudio = localAudioTracks().length > 0;
-  const audioEnabled = localAudioTracks().some((track) => track.enabled);
+  const hasAudio = localSystemAudioTracks().length > 0;
+  const audioEnabled = localSystemAudioTracks().some((track) => track.enabled);
   audioButton.hidden = !sharing;
   audioButton.disabled = audioCapturePending;
   audioButton.classList.toggle('muted', hasAudio && !audioEnabled);
@@ -1138,6 +1288,17 @@ function updateRoomUI() {
   audioButton.title = audioAction;
   const label = audioButton.querySelector('span');
   if (label) label.textContent = audioAction;
+  const microphoneButton = $('#local-microphone-button');
+  const microphoneActive = localMicrophoneTracks().some((track) => track.enabled);
+  microphoneButton.hidden = !sharing;
+  microphoneButton.disabled = microphoneCapturePending;
+  microphoneButton.classList.toggle('active', microphoneActive);
+  microphoneButton.setAttribute('aria-pressed', String(microphoneActive));
+  const microphoneAction = microphoneCapturePending ? 'Opening microphone…' : microphoneActive ? 'Stop sharing microphone' : 'Share microphone';
+  microphoneButton.setAttribute('aria-label', microphoneAction);
+  microphoneButton.title = microphoneAction;
+  const microphoneLabel = microphoneButton.querySelector('span');
+  if (microphoneLabel) microphoneLabel.textContent = microphoneAction;
   updateDropAvailability();
 }
 
@@ -2605,6 +2766,7 @@ $('#share-button').addEventListener('click', startRoom);
 $('#stream-button').addEventListener('click', () => localPresentation ? stopLocalPresentation() : startRoomPresentation());
 $('#test-stream-button').addEventListener('click', () => void startSyntheticPresentation());
 $('#local-audio-button').addEventListener('click', () => void toggleLocalAudio());
+$('#local-microphone-button').addEventListener('click', () => void toggleLocalMicrophone());
 $('#leave-room-button').addEventListener('click', () => void leaveRoom());
 window.addEventListener('pagehide', handlePageDeparture);
 window.addEventListener('beforeunload', () => handlePageDeparture());

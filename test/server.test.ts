@@ -265,6 +265,7 @@ test('serves the app and public client configuration', async () => {
   assert.match(page, /id="leave-room-button"/);
   assert.match(page, /id="stream-button"/);
   assert.match(page, /id="local-audio-button"/);
+  assert.match(page, /id="local-microphone-button"/);
   assert.match(page, /data-share-audio/);
   assert.equal((page.match(/data-share-audio/g) || []).length, 1);
   assert.match(page, /id="copy-invite-button"/);
