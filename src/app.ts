@@ -180,7 +180,7 @@ let audioCapturePending = false;
 let additionalAudioCapture: MediaStream | undefined;
 let currentStreamSettings: RoomStreamSettings = { ...qualityPresets['720p'] };
 let rtcConfig: RTCConfiguration = {
-  iceServers: [{ urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'] }],
+  iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }],
 };
 let chatAudioContext: AudioContext | undefined;
 let chatSoundsEnabled = readChatSoundsEnabled();

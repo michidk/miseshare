@@ -68,12 +68,12 @@ Vercel serves files in `public/` from its CDN and runs the room REST API as stat
 | `REQUEST_LOGGING` | production/Vercel: `true`; otherwise `false` | Emit structured request ID, status, path, and duration logs; server errors are always logged |
 | `VITE_HEAD_HTML` | _(empty)_ | Trusted markup injected verbatim into the app `<head>` at server startup |
 | `EMOTES_ENABLED` | `true` | Load the global emote catalog and serve assets through the same-origin image proxy |
-| `STUN_URLS` | `stun:main.lohr.dev:3478,stun:stun.l.google.com:19302` | Comma-separated STUN URLs; the second default is a public fallback and non-STUN entries are ignored |
+| `STUN_URLS` | `stun:stun.l.google.com:19302` | Comma-separated STUN URLs; non-STUN entries are ignored |
 | `TURN_URLS` | _(empty)_ | Comma-separated `turn:` or `turns:` URLs for a coturn-compatible relay |
 | `TURN_SHARED_SECRET` | _(required with `TURN_URLS`)_ | coturn REST authentication secret; never sent to browsers |
 | `TURN_TTL_SECONDS` | `3600` | Lifetime of generated TURN credentials, from 60 to 86400 seconds |
 
-Browsers receive both defaults and may query them concurrently; WebRTC does not guarantee a strictly sequential failover order.
+When `STUN_URLS` contains multiple servers, browsers may query them concurrently; WebRTC does not guarantee a strictly sequential failover order.
 
 `VITE_HEAD_HTML` accepts complete tags, such as a Meta Pixel `<script>` or a
 site-verification `<meta>` tag. Treat it as trusted executable configuration:

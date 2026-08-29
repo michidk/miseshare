@@ -75,7 +75,7 @@ before(async () => {
       VITE_HEAD_HTML: `  ${headHtml}  `,
       RATE_LIMIT_ENABLED: 'false',
       PORT: String(port),
-      STUN_URLS: 'turn:relay.invalid:3478, stun:main.lohr.dev:3478, stun:stun.l.google.com:19302',
+      STUN_URLS: 'turn:relay.invalid:3478, stun:one.example.test:3478, stun:two.example.test:3478',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -130,9 +130,9 @@ test('rejects an undersized admin session secret', () => {
   assert.match(result.stderr, /ADMIN_SESSION_SECRET must contain at least 32 bytes/);
 });
 
-test('leaves app HTML and CSP unchanged when trusted head HTML is unset', async () => {
+test('uses Google STUN and leaves app HTML and CSP unchanged when optional configuration is unset', async () => {
   const port = await getAvailablePort();
-  const { VITE_HEAD_HTML: _, ...env } = process.env;
+  const { STUN_URLS: _, VITE_HEAD_HTML: __, ...env } = process.env;
   const appWithoutHeadHtml = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
     cwd: new URL('..', import.meta.url),
     env: {
@@ -152,6 +152,8 @@ test('leaves app HTML and CSP unchanged when trusted head HTML is unset', async 
     const policy = requiredHeader(response, 'content-security-policy');
     assert.doesNotMatch(policy, /https:|unsafe-inline.*script|script-src[^;]*unsafe-inline/);
     assert.match(policy, /script-src 'self';/);
+    const config = await fetch(`http://127.0.0.1:${port}/config`).then((result) => result.json());
+    assert.deepEqual(config, { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
   } finally {
     appWithoutHeadHtml.kill('SIGTERM');
   }
@@ -211,7 +213,7 @@ test('serves the app and public client configuration', async () => {
   assert.deepEqual(health, { ok: true });
   assert.deepEqual(await liveness.json(), { ok: true });
   assert.deepEqual(config.iceServers, [{
-    urls: ['stun:main.lohr.dev:3478', 'stun:stun.l.google.com:19302'],
+    urls: ['stun:one.example.test:3478', 'stun:two.example.test:3478'],
   }]);
   assert.equal('demoTurn' in config, false);
   assert.equal(configResponse.headers.get('cache-control'), 'private, no-store');
