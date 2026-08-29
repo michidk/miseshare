@@ -202,7 +202,7 @@ test('microphone and screen audio can be shared and stopped independently', asyn
   const viewer = await page.context().newPage();
   await viewer.goto(page.url());
   await expect(viewer.locator('[data-chat-input]')).toBeEnabled({ timeout: 20_000 });
-  await page.locator('#test-stream-button').click();
+  await expect(page.locator('#local-microphone-button')).toBeVisible();
   await expect(page.locator('#local-microphone-button')).toHaveAttribute('title', 'Share microphone');
 
   await page.evaluate(() => {
@@ -240,6 +240,8 @@ test('microphone and screen audio can be shared and stopped independently', asyn
 
   await page.locator('#local-microphone-button').click();
   await expect(page.locator('#local-microphone-button')).toHaveAttribute('title', 'Stop sharing microphone');
+  await expect(page.locator('#your-stream-status')).toHaveText('Voice only · mic on');
+  await page.locator('#test-stream-button').click();
   await expect(page.locator('#your-stream-status')).toContainText('mic on');
   await expect(viewer.locator('.stream-card .audio-state')).toHaveText('Audio on');
 
@@ -250,10 +252,14 @@ test('microphone and screen audio can be shared and stopped independently', asyn
   await expect(page.locator('#your-stream-status')).toContainText('mic on');
   await expect(viewer.locator('.stream-card .audio-state')).toHaveText('Audio on');
 
+  await page.locator('#stream-button').click();
+  await expect(viewer.locator('.stream-card')).toHaveCount(0);
+  await expect(page.locator('#local-microphone-button')).toBeVisible();
+  await expect(page.locator('#local-microphone-button')).toHaveAttribute('title', 'Stop sharing microphone');
+  await expect(page.locator('#your-stream-status')).toHaveText('Voice only · mic on');
   await page.locator('#local-microphone-button').click();
   await expect(page.locator('#local-microphone-button')).toHaveAttribute('title', 'Share microphone');
-  await expect(page.locator('#your-stream-status')).toContainText('audio off');
-  await expect(viewer.locator('.stream-card .audio-state')).toHaveText('No audio');
+  await expect(page.locator('#your-stream-status')).toHaveText('Not sharing');
   const microphoneCapture = await page.evaluate(() => {
     const state = window as unknown as { microphoneConstraints?: MediaStreamConstraints; microphonePickerCalls?: number; microphoneTrack?: MediaStreamTrack };
     return { calls: state.microphonePickerCalls, constraints: state.microphoneConstraints, trackState: state.microphoneTrack?.readyState };

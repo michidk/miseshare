@@ -797,7 +797,7 @@ function receiveMediaTrack(peerId: string, track: MediaStreamTrack, streams: rea
   audio.srcObject = streams[0] ?? new MediaStream([track]);
   audio.muted = mutedPresenters.has(peerId);
   remoteAudioElements.set(peerId, audio);
-  const name = presenters.get(peerId)?.name ?? 'participant';
+  const name = presenters.get(peerId)?.name ?? participantNames.get(peerId) ?? 'participant';
   void audio.play().catch(() => showToast(`Click ${name}’s mute button to enable audio.`));
   track.addEventListener('ended', () => closeIncomingAudio(peerId), { once: true });
 }
@@ -827,7 +827,7 @@ function stopLocalPresentation() {
   if (!localPresentation) return;
   const presenterId = signaling?.participantId;
   disposeLocalPresentation();
-  void mesh?.setAudioTrack(null);
+  void syncOutgoingLocalAudio().catch((error) => showToast(errorMessage(error, 'Could not preserve microphone audio.'), 'error'));
   void mesh?.setVideoTrack(null);
   session.finishPresentation();
   if (presenterId) removePresenter(presenterId);
@@ -850,7 +850,6 @@ function disposeLocalPresentation() {
   const presentation = localPresentation;
   localPresentation = undefined;
   stopLocalAudioMix();
-  stopLocalMicrophoneCapture();
   stopAdditionalAudioCapture();
   presentation?.stop();
   if (syntheticStreamTimer !== undefined) window.clearInterval(syntheticStreamTimer);
@@ -949,6 +948,7 @@ function stopAdditionalAudioCapture(capture = additionalAudioCapture) {
 }
 
 function publishLocalAudioState() {
+  if (!localPresentation) return;
   const presenter = localPresenterInfo();
   const previous = presenters.get(presenter.id);
   upsertPresenter(presenter);
@@ -1047,8 +1047,8 @@ async function handleLocalMicrophoneEnded(track: MediaStreamTrack) {
 }
 
 async function startLocalMicrophone() {
-  const presentation = localPresentation;
-  if (!presentation || microphoneCapturePending || localMicrophoneTracks().length) return;
+  const participantId = signaling?.participantId;
+  if (!participantId || !mesh || session.ended || microphoneCapturePending || localMicrophoneTracks().length) return;
   if (!navigator.mediaDevices?.getUserMedia) {
     showToast('Microphone sharing is not supported in this browser.', 'error');
     return;
@@ -1063,7 +1063,7 @@ async function startLocalMicrophone() {
     });
     const track = capture.getAudioTracks().find((candidate) => candidate.readyState === 'live');
     if (!track) throw new Error('No microphone audio was available.');
-    if (localPresentation !== presentation) {
+    if (session.ended || signaling?.participantId !== participantId || !mesh) {
       stopLocalMicrophoneCapture(capture);
       return;
     }
@@ -1274,6 +1274,7 @@ function updateRoomUI() {
   testStreamButton.disabled = sharing || session.presentationPending || session.ended || (!session.isHost && !viewerControl?.open);
   $('#your-stream-status').textContent = sharing
     ? `${currentStreamSettings.buttonLabel} · ${localAudioStatus()}`
+    : localMicrophoneTracks().some((track) => track.enabled) ? 'Voice only · mic on'
     : session.presentationPending ? 'Starting…' : 'Not sharing';
   $('#share-audio-option').hidden = sharing;
   const audioButton = $('#local-audio-button');
@@ -1290,8 +1291,8 @@ function updateRoomUI() {
   if (label) label.textContent = audioAction;
   const microphoneButton = $('#local-microphone-button');
   const microphoneActive = localMicrophoneTracks().some((track) => track.enabled);
-  microphoneButton.hidden = !sharing;
-  microphoneButton.disabled = microphoneCapturePending;
+  microphoneButton.hidden = session.ended;
+  microphoneButton.disabled = microphoneCapturePending || !mesh || !signaling?.participantId;
   microphoneButton.classList.toggle('active', microphoneActive);
   microphoneButton.setAttribute('aria-pressed', String(microphoneActive));
   const microphoneAction = microphoneCapturePending ? 'Opening microphone…' : microphoneActive ? 'Stop sharing microphone' : 'Share microphone';
@@ -2700,6 +2701,8 @@ function disposeConnections() {
   connectivityResults.clear();
   drop.clear();
   clearDropTransfers();
+  stopLocalAudioMix();
+  stopLocalMicrophoneCapture();
   viewerControl = undefined;
   signaling?.stop();
   signaling = undefined;
