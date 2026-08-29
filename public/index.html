@@ -214,9 +214,18 @@
               <div><span class="chat-live-dot"></span><h2>Chat &amp; activity</h2></div>
               <div class="chat-heading-actions">
                 <span data-participant-count>1 participant</span>
-                <button class="chat-action-toggle" data-card-notification-toggle type="button" aria-label="Turn off popup notifications" aria-pressed="true" title="Turn off popup notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 3v-4.3A2 2 0 0 1 3 15V7a2 2 0 0 1 2-2Z"/><path class="chat-toggle-off" d="m4 4 16 16"/></svg></button>
-                <button class="chat-sound-toggle" data-chat-sound-toggle type="button" aria-label="Mute notification sounds" aria-pressed="true" title="Mute notification sounds"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/><path class="chat-sound-off" d="m4 4 16 16"/></svg></button>
-                <button class="chat-action-toggle" id="chat-collapse-button" type="button" aria-label="Collapse chat" title="Collapse chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 7-5 5 5 5"/><path d="M20 4v16"/></svg></button>
+                <button class="chat-action-toggle" data-card-notification-toggle type="button" aria-label="Turn off popup notifications" aria-pressed="true" aria-describedby="popup-notifications-help">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 3v-4.3A2 2 0 0 1 3 15V7a2 2 0 0 1 2-2Z"/><path class="chat-toggle-off" d="m4 4 16 16"/></svg>
+                  <span id="popup-notifications-help" class="control-popover" role="tooltip"><strong>Popup notifications</strong><span data-card-notification-description>On · New room activity appears as popup cards.</span></span>
+                </button>
+                <button class="chat-sound-toggle" data-chat-sound-toggle type="button" aria-label="Mute notification sounds" aria-pressed="true" aria-describedby="notification-sounds-help">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/><path class="chat-sound-off" d="m4 4 16 16"/></svg>
+                  <span id="notification-sounds-help" class="control-popover" role="tooltip"><strong>Notification sounds</strong><span data-chat-sound-description>On · A sound plays for new messages and activity.</span></span>
+                </button>
+                <button class="chat-action-toggle" id="chat-collapse-button" type="button" aria-label="Collapse chat" aria-describedby="collapse-chat-help">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 7-5 5 5 5"/><path d="M20 4v16"/></svg>
+                  <span id="collapse-chat-help" class="control-popover" role="tooltip"><strong>Collapse chat</strong><span>Hide this panel to give shared screens more room.</span></span>
+                </button>
               </div>
             </div>
             <div class="chat-messages" data-chat-messages>

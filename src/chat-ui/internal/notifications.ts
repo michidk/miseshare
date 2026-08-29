@@ -40,10 +40,14 @@ export function buildRoomNotificationController(root: HTMLElement, storage: Stor
     },
     syncButtons(selector = '[data-card-notification-toggle]') {
       const action = enabled ? 'Turn off popup notifications' : 'Turn on popup notifications';
+      const description = enabled
+        ? 'On · New room activity appears as popup cards.'
+        : 'Off · Click to show new activity as popup cards.';
       document.querySelectorAll<HTMLButtonElement>(selector).forEach((button) => {
         button.setAttribute('aria-pressed', String(enabled));
         button.setAttribute('aria-label', action);
-        button.title = action;
+        const help = button.querySelector<HTMLElement>('[data-card-notification-description]');
+        if (help) help.textContent = description;
       });
     },
   };

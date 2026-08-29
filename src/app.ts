@@ -2136,10 +2136,14 @@ function readChatSoundsEnabled() {
 
 function syncChatSoundButtons() {
   const action = chatSoundsEnabled ? 'Mute notification sounds' : 'Enable notification sounds';
+  const description = chatSoundsEnabled
+    ? 'On · A sound plays for new messages and activity.'
+    : 'Off · Click to hear new-message and activity sounds.';
   document.querySelectorAll<HTMLButtonElement>('[data-chat-sound-toggle]').forEach((button) => {
     button.setAttribute('aria-pressed', String(chatSoundsEnabled));
     button.setAttribute('aria-label', action);
-    button.title = action;
+    const help = button.querySelector<HTMLElement>('[data-chat-sound-description]');
+    if (help) help.textContent = description;
   });
 }
 
