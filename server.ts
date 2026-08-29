@@ -31,7 +31,7 @@ if (Buffer.byteLength(adminSessionSecret) < 32) throw new Error('ADMIN_SESSION_S
 const secureCookies = environmentBoolean('SECURE_COOKIES', Boolean(process.env.VERCEL || process.env.NODE_ENV === 'production'));
 const requestLogging = environmentBoolean('REQUEST_LOGGING', Boolean(process.env.VERCEL || process.env.NODE_ENV === 'production'));
 const iceServerFactory = buildIceServerFactory({
-  stunUrls: process.env.STUN_URLS || 'stun:main.lohr.dev:3478,stun:stun.l.google.com:19302',
+  stunUrls: process.env.STUN_URLS || 'stun:stun.l.google.com:19302',
   turnUrls: process.env.TURN_URLS,
   turnSharedSecret: process.env.TURN_SHARED_SECRET,
   turnTtlSeconds: optionalInteger('TURN_TTL_SECONDS'),
