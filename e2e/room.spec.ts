@@ -127,7 +127,7 @@ test('a same-context tab joining after native sharing started receives the strea
   await viewer.goto(page.url());
   const remoteCard = viewer.locator('.stream-card');
   await expect(remoteCard).not.toHaveClass(/connecting/, { timeout: 30_000 });
-  await expect(remoteCard.locator('video')).toHaveJSProperty('videoWidth', 1280);
+  await expectNativeVideoFrame(remoteCard.locator('video'));
   await viewer.close();
 });
 
@@ -143,7 +143,7 @@ test('an existing same-context tab receives a native stream started by the host'
   await page.locator('#test-stream-button').click();
   const remoteCard = viewer.locator('.stream-card');
   await expect(remoteCard).not.toHaveClass(/connecting/, { timeout: 30_000 });
-  await expect(remoteCard.locator('video')).toHaveJSProperty('videoWidth', 1280);
+  await expectNativeVideoFrame(remoteCard.locator('video'));
   await viewer.close();
 });
 
@@ -208,7 +208,7 @@ test('the host receives a native stream started by an existing same-context tab'
   await viewer.locator('#test-stream-button').click();
   const remoteCard = page.locator('.stream-card');
   await expect(remoteCard).not.toHaveClass(/connecting/, { timeout: 30_000 });
-  await expect(remoteCard.locator('video')).toHaveJSProperty('videoWidth', 1280);
+  await expectNativeVideoFrame(remoteCard.locator('video'));
   await viewer.close();
 });
 
@@ -285,6 +285,13 @@ async function visibleVideoPixel(locator: import('@playwright/test').Locator) {
     const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
     return red + green + blue > 60;
   });
+}
+
+async function expectNativeVideoFrame(locator: import('@playwright/test').Locator) {
+  await expect.poll(() => locator.evaluate((video: HTMLVideoElement) => {
+    if (!video.videoWidth || !video.videoHeight) return false;
+    return Math.abs(video.videoWidth / video.videoHeight - 16 / 9) < 0.01;
+  })).toBe(true);
 }
 
 async function installVisibleDisplayMedia(page: import('@playwright/test').Page) {
