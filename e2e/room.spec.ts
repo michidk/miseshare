@@ -212,14 +212,6 @@ test('microphone and screen audio can be shared and stopped independently', asyn
     microphoneOscillator.connect(microphoneDestination);
     microphoneOscillator.start();
 
-    const screenContext = new AudioContext();
-    const screenOscillator = screenContext.createOscillator();
-    const screenDestination = screenContext.createMediaStreamDestination();
-    screenOscillator.connect(screenDestination);
-    screenOscillator.start();
-    const canvas = document.createElement('canvas');
-    const videoTrack = canvas.captureStream(1).getVideoTracks()[0];
-
     const mediaDevices = navigator.mediaDevices ?? {};
     if (!navigator.mediaDevices) Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: mediaDevices });
     Object.defineProperty(mediaDevices, 'getUserMedia', {
@@ -234,7 +226,20 @@ test('microphone and screen audio can be shared and stopped independently', asyn
     });
     Object.defineProperty(mediaDevices, 'getDisplayMedia', {
       configurable: true,
-      value: async () => new MediaStream([videoTrack, screenDestination.stream.getAudioTracks()[0]]),
+      value: async () => {
+        const screenContext = new AudioContext();
+        const screenOscillator = screenContext.createOscillator();
+        const screenDestination = screenContext.createMediaStreamDestination();
+        screenOscillator.connect(screenDestination);
+        screenOscillator.start();
+        void screenContext.resume().catch(() => {});
+        const canvas = document.createElement('canvas');
+        const videoTrack = canvas.captureStream(1).getVideoTracks()[0];
+        const stream = new MediaStream([videoTrack, screenDestination.stream.getAudioTracks()[0]]);
+        const state = window as unknown as { screenAudioCaptures?: Array<{ context: AudioContext; oscillator: OscillatorNode; stream: MediaStream }> };
+        state.screenAudioCaptures = [...(state.screenAudioCaptures ?? []), { context: screenContext, oscillator: screenOscillator, stream }];
+        return stream;
+      },
     });
   });
 

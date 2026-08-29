@@ -919,7 +919,7 @@ async function syncOutgoingLocalAudio() {
     const track = destination.stream.getAudioTracks()[0];
     if (!track) throw new Error('Could not create a mixed audio track.');
     localAudioMix = { context, destination, sources, track };
-    await context.resume();
+    void context.resume().catch(() => {});
     await mesh?.setAudioTrack(track);
   } catch (error) {
     for (const source of sources) source.disconnect();
