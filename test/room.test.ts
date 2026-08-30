@@ -97,6 +97,21 @@ test('host protocol parser returns typed presenters and derives host authority l
   assert.equal(message?.type, 'stream-started');
   if (message?.type !== 'stream-started') assert.fail('Expected a stream-started message.');
   assert.equal(message.presenter.isHost, true);
+  assert.equal(message.presenter.kind, 'screen');
+
+  const voiceMessage = parseHostRoomMessage({
+    type: 'stream-started',
+    presenter: {
+      id: 'guest-123',
+      name: 'Guest',
+      kind: 'voice',
+      audioEnabled: true,
+      settings,
+    },
+  }, 'host-room');
+  assert.equal(voiceMessage?.type, 'stream-started');
+  if (voiceMessage?.type !== 'stream-started') assert.fail('Expected a voice stream-started message.');
+  assert.equal(voiceMessage.presenter.kind, 'voice');
 });
 
 test('viewer protocol parser rejects malformed codec settings', () => {
@@ -109,6 +124,17 @@ test('viewer protocol parser rejects malformed codec settings', () => {
     type: 'settings-changed',
     streamSettings: settings,
   }), { type: 'settings-changed', streamSettings: settings });
+
+  assert.deepEqual(parseViewerRoomMessage({
+    type: 'stream-started',
+    kind: 'voice',
+    audioEnabled: true,
+  }), { type: 'stream-started', kind: 'voice', streamSettings: undefined, audioEnabled: true });
+  assert.equal(parseViewerRoomMessage({
+    type: 'stream-started',
+    kind: 'camera',
+    audioEnabled: true,
+  }), undefined);
 });
 
 test('room protocol accepts bounded native WebRTC video settings', () => {

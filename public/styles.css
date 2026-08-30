@@ -678,8 +678,21 @@ body[data-screen="room"] .site-header { width: min(1440px, calc(100% - 48px)); h
 
 .stream-card { min-width: 0; overflow: hidden; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; background: #17191e; box-shadow: 0 14px 34px rgba(21,23,29,.17); }
 .stream-card.host-stream { border-color: rgba(86,116,255,.72); box-shadow: 0 0 0 2px rgba(49,88,245,.13), 0 14px 34px rgba(21,23,29,.17); }
+.stream-card.voice-only { border: 2px solid rgba(255,82,91,.92); box-shadow: 0 0 0 3px rgba(255,82,91,.14), 0 14px 34px rgba(21,23,29,.2); }
 .stream-card-media { aspect-ratio: 16 / 9; position: relative; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 50% 48%, #282c34, #17191e 70%); }
 .stream-card-media video, .stream-card-media canvas { width: 100%; height: 100%; display: block; object-fit: contain; background: #15171b; }
+.voice-avatar-stage { width: 100%; height: 100%; position: relative; display: grid; place-items: center; background: radial-gradient(circle at 50% 46%, #343944 0, #24272f 48%, #17191e 78%); }
+.voice-avatar-stage::before { width: clamp(138px, 23vw, 226px); aspect-ratio: 1; position: absolute; content: ''; border: 1px solid rgba(255,102,109,.24); border-radius: 50%; box-shadow: 0 0 55px rgba(255,82,91,.12); }
+.voice-avatar-stage strong { position: absolute; bottom: 12%; color: rgba(255,255,255,.7); font-size: 9px; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+.voice-avatar { width: clamp(104px, 17vw, 176px); aspect-ratio: 1; z-index: 1; display: grid; place-items: center; border: 5px solid #ff525b; border-radius: 50%; background: #dce8ff; box-shadow: 0 0 0 8px rgba(255,82,91,.11), 0 18px 44px rgba(0,0,0,.32); font-size: clamp(48px, 7vw, 78px); line-height: 1; }
+.voice-avatar.color-1 { background: #fce2c4; }
+.voice-avatar.color-2 { background: #d9f0df; }
+.voice-avatar.color-3 { background: #f4ddf3; }
+.voice-avatar.color-4 { background: #d6eff1; }
+.voice-avatar.color-5 { background: #f7e4a8; }
+.voice-avatar.color-6 { background: #e3defa; }
+.voice-avatar.color-7 { background: #f8dada; }
+.voice-avatar.host { background: var(--blue); }
 .stream-card-media:fullscreen { width: 100vw; height: 100vh; aspect-ratio: auto; background: #000; }
 .stream-fullscreen { width: 34px; height: 34px; padding: 0; position: absolute; z-index: 2; right: 10px; bottom: 10px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; color: white; background: rgba(15,17,22,.72); box-shadow: 0 5px 16px rgba(0,0,0,.22); cursor: pointer; opacity: .82; transition: opacity .18s, background .18s, transform .18s; }
 .stream-fullscreen:hover { opacity: 1; background: rgba(15,17,22,.9); transform: translateY(-1px); }

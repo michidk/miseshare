@@ -93,8 +93,10 @@ export function parseViewerRoomMessage(value: unknown): ViewerRoomMessage | unde
   if (!message || typeof message.type !== 'string') return undefined;
   switch (message.type) {
     case 'stream-started':
+      if (message.kind !== undefined && message.kind !== 'screen' && message.kind !== 'voice') return undefined;
       return {
         type: 'stream-started',
+        kind: message.kind === 'voice' ? 'voice' : 'screen',
         streamSettings: parseStreamSettings(message.streamSettings),
         audioEnabled: message.audioEnabled === true,
       };
@@ -124,8 +126,16 @@ export function parsePresenter(value: unknown, hostId: string): PresenterInfo | 
   const id = peerId(presenter.id);
   const name = boundedString(presenter.name, 40);
   const settings = parseStreamSettings(presenter.settings);
-  if (!id || !name || typeof presenter.audioEnabled !== 'boolean' || !settings) return undefined;
-  return { id, name, isHost: id === hostId, audioEnabled: presenter.audioEnabled, settings };
+  if (!id || !name || typeof presenter.audioEnabled !== 'boolean' || !settings
+    || (presenter.kind !== undefined && presenter.kind !== 'screen' && presenter.kind !== 'voice')) return undefined;
+  return {
+    id,
+    name,
+    isHost: id === hostId,
+    kind: presenter.kind === 'voice' ? 'voice' : 'screen',
+    audioEnabled: presenter.audioEnabled,
+    settings,
+  };
 }
 
 export function parseTextSettings(value: unknown): TextCodecSettings | undefined {

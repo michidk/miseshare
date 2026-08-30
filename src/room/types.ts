@@ -1,6 +1,7 @@
 import type { NativeVideoSettings, TextCodecSettings } from '../media/index.js';
 
 export type RoomStreamSettings = TextCodecSettings | NativeVideoSettings;
+export type PresenterKind = 'screen' | 'voice';
 
 export type ActivityKind = 'joined' | 'left' | 'stream-started' | 'stream-stopped' | 'audio' | 'settings';
 
@@ -8,6 +9,7 @@ export interface PresenterInfo {
   id: string;
   name: string;
   isHost: boolean;
+  kind: PresenterKind;
   audioEnabled: boolean;
   settings: RoomStreamSettings;
 }
@@ -55,7 +57,7 @@ export type HostRoomMessage =
   | { type: 'participant-left'; peerId: string };
 
 export type ViewerRoomMessage =
-  | { type: 'stream-started'; streamSettings?: RoomStreamSettings; audioEnabled: boolean }
+  | { type: 'stream-started'; kind: PresenterKind; streamSettings?: RoomStreamSettings; audioEnabled: boolean }
   | { type: 'stop-presenting' }
   | { type: 'settings-changed' | 'settings-selected'; streamSettings: RoomStreamSettings }
   | { type: 'audio-changed'; audioEnabled: boolean }

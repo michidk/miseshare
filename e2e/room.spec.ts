@@ -195,7 +195,7 @@ test('stream audio can be started, stopped, and resumed during a screen share', 
   await viewer.close();
 });
 
-test('microphone and screen audio can be shared and stopped independently', async ({ page }) => {
+test('voice-only microphone and screen audio can be shared and stopped independently', async ({ page }) => {
   await page.goto('/?test');
   await page.locator('#share-button').click();
   await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
@@ -246,7 +246,17 @@ test('microphone and screen audio can be shared and stopped independently', asyn
   await page.locator('#local-microphone-button').click();
   await expect(page.locator('#local-microphone-button')).toHaveAttribute('title', 'Stop sharing microphone');
   await expect(page.locator('#your-stream-status')).toHaveText('Voice only · mic on');
+  const localVoiceCard = page.locator('.stream-card.voice-only');
+  const remoteVoiceCard = viewer.locator('.stream-card.voice-only');
+  await expect(localVoiceCard).not.toHaveClass(/connecting/);
+  await expect(remoteVoiceCard).not.toHaveClass(/connecting/, { timeout: 20_000 });
+  await expect(remoteVoiceCard.locator('.voice-avatar-stage')).toBeVisible();
+  await expect(remoteVoiceCard.locator('.voice-avatar')).toHaveText('👑');
+  await expect(remoteVoiceCard.locator('.stream-person small')).toHaveText('Voice transmission · microphone on');
+  await expect(remoteVoiceCard.locator('.audio-state')).toHaveText('Voice on');
   await page.locator('#test-stream-button').click();
+  await expect(page.locator('.stream-card')).not.toHaveClass(/voice-only/);
+  await expect(viewer.locator('.stream-card')).not.toHaveClass(/voice-only/);
   await expect(page.locator('#your-stream-status')).toContainText('mic on');
   await expect(viewer.locator('.stream-card .audio-state')).toHaveText('Audio on');
 
@@ -258,13 +268,15 @@ test('microphone and screen audio can be shared and stopped independently', asyn
   await expect(viewer.locator('.stream-card .audio-state')).toHaveText('Audio on');
 
   await page.locator('#stream-button').click();
-  await expect(viewer.locator('.stream-card')).toHaveCount(0);
+  await expect(viewer.locator('.stream-card.voice-only')).not.toHaveClass(/connecting/);
+  await expect(viewer.locator('.stream-card .audio-state')).toHaveText('Voice on');
   await expect(page.locator('#local-microphone-button')).toBeVisible();
   await expect(page.locator('#local-microphone-button')).toHaveAttribute('title', 'Stop sharing microphone');
   await expect(page.locator('#your-stream-status')).toHaveText('Voice only · mic on');
   await page.locator('#local-microphone-button').click();
   await expect(page.locator('#local-microphone-button')).toHaveAttribute('title', 'Share microphone');
   await expect(page.locator('#your-stream-status')).toHaveText('Not sharing');
+  await expect(viewer.locator('.stream-card')).toHaveCount(0);
   const microphoneCapture = await page.evaluate(() => {
     const state = window as unknown as { microphoneConstraints?: MediaStreamConstraints; microphonePickerCalls?: number; microphoneTrack?: MediaStreamTrack };
     return { calls: state.microphonePickerCalls, constraints: state.microphoneConstraints, trackState: state.microphoneTrack?.readyState };
@@ -275,6 +287,25 @@ test('microphone and screen audio can be shared and stopped independently', asyn
     audio: { autoGainControl: true, echoCancellation: true, noiseSuppression: true },
     video: false,
   });
+
+  await viewer.evaluate(() => {
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const destination = context.createMediaStreamDestination();
+    oscillator.connect(destination);
+    oscillator.start();
+    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: async () => new MediaStream([destination.stream.getAudioTracks()[0]]),
+    });
+  });
+  await viewer.locator('#local-microphone-button').click();
+  const guestVoiceCard = page.locator('.stream-card.voice-only');
+  await expect(guestVoiceCard).not.toHaveClass(/connecting/, { timeout: 20_000 });
+  await expect(guestVoiceCard.locator('.voice-avatar')).toHaveText(/\S/);
+  await expect(guestVoiceCard.locator('.audio-state')).toHaveText('Voice on');
+  await viewer.locator('#local-microphone-button').click();
+  await expect(page.locator('.stream-card')).toHaveCount(0);
   await viewer.close();
 });
 

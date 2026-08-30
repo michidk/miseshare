@@ -587,26 +587,36 @@ function handleViewerData(viewerId: string, value: unknown) {
   if (!viewer) return;
 
   if (message.type === 'stream-started') {
+    const previous = presenters.get(viewerId);
     const settings = message.streamSettings || qualityPresets['720p'];
     const presenter: PresenterInfo = {
       id: viewerId,
       name: viewer.name,
       isHost: false,
+      kind: message.kind,
       audioEnabled: message.audioEnabled,
       settings,
     };
     upsertPresenter(presenter);
     broadcast({ type: 'stream-started', presenter });
-    announceSystem(viewer.name, 'started sharing.', 'stream-started');
-    const participants = [signaling?.participantId, ...hostConnections.keys()].filter((id): id is string => Boolean(id && id !== viewerId));
-    viewer.control.send({ type: 'share-approved', participants });
+    const transition = previous?.kind === 'screen' && presenter.kind === 'voice'
+      ? 'stopped sharing their screen; microphone remains on.'
+      : previous?.kind === 'voice' && presenter.kind === 'screen'
+        ? 'started sharing a screen while transmitting voice.'
+        : presenter.kind === 'voice' ? 'started transmitting voice.' : 'started sharing.';
+    announceSystem(viewer.name, transition, presenter.kind === 'voice' ? 'audio' : 'stream-started');
+    if (presenter.kind === 'screen') {
+      const participants = [signaling?.participantId, ...hostConnections.keys()].filter((id): id is string => Boolean(id && id !== viewerId));
+      viewer.control.send({ type: 'share-approved', participants });
+    }
     return;
   }
   if (message.type === 'stop-presenting') {
-    if (!presenters.has(viewerId)) return;
+    const presenter = presenters.get(viewerId);
+    if (!presenter) return;
     removePresenter(viewerId);
     broadcast({ type: 'stream-stopped', presenterId: viewerId });
-    announceSystem(viewer.name, 'stopped sharing.', 'stream-stopped');
+    announceSystem(viewer.name, presenter.kind === 'voice' ? 'stopped transmitting voice.' : 'stopped sharing.', 'stream-stopped');
     return;
   }
   if (message.type === 'settings-changed') {
@@ -710,6 +720,7 @@ async function beginLocalPresentation(stream: MediaStream) {
   }
   await localPresentation.start();
   for (const track of localSystemAudioTracks()) track.onended = () => void handleLocalSystemAudioEnded(track);
+  const previous = presenters.get(signaling.participantId);
   const presenter = localPresenterInfo();
   upsertPresenter(presenter);
   attachLocalPreview(stream, presenter.id);
@@ -719,11 +730,14 @@ async function beginLocalPresentation(stream: MediaStream) {
   if (session.isHost) {
     session.finishPresentation();
     broadcast({ type: 'stream-started', presenter });
-    announceSystem('Host', 'started sharing.', 'stream-started');
+    announceSystem('Host', previous?.kind === 'voice'
+      ? 'started sharing a screen while transmitting voice.'
+      : 'started sharing.', 'stream-started');
     connectLocalStreamToParticipants([...hostConnections.keys()]);
   } else if (viewerControl?.open) {
     viewerControl.send({
       type: 'stream-started',
+      kind: presenter.kind,
       streamSettings: presenter.settings,
       audioEnabled: presenter.audioEnabled,
     });
@@ -745,6 +759,7 @@ function localPresenterInfo(): PresenterInfo {
     id: signaling?.participantId || '',
     name: session.isHost ? 'Host' : session.viewerName || 'You',
     isHost: session.isHost,
+    kind: localPresentation ? 'screen' : 'voice',
     audioEnabled: localAudioIsEnabled(),
     settings,
   };
@@ -770,7 +785,7 @@ function disconnectLocalStreamFrom(participantId: string) {
 function attachIncomingTextStream(presenterId: string) {
   const presenter = presenters.get(presenterId);
   if (presenterId === signaling?.participantId || incomingTextReceivers.has(presenterId)
-    || presenter?.settings.codec !== TEXT_CODEC_ID) return;
+    || presenter?.kind !== 'screen' || presenter.settings.codec !== TEXT_CODEC_ID) return;
   const connection = peerChannels.get(presenterId)?.screen;
   const canvas = streamCardMedia<HTMLCanvasElement>(presenterId, 'canvas');
   if (!connection || !canvas) return;
@@ -806,7 +821,7 @@ function attachIncomingNativeStream(presenterId: string) {
   const presenter = presenters.get(presenterId);
   const stream = remoteVideoStreams.get(presenterId);
   const video = streamCardMedia<HTMLVideoElement>(presenterId, 'video');
-  if (!stream || !video || presenter?.settings.codec !== NATIVE_VIDEO_CODEC_ID) return;
+  if (!stream || !video || presenter?.kind !== 'screen' || presenter.settings.codec !== NATIVE_VIDEO_CODEC_ID) return;
   const connected = () => setCardConnected(presenterId);
   video.addEventListener('loadeddata', connected, { once: true });
   video.addEventListener('resize', connected, { once: true });
@@ -830,9 +845,10 @@ function stopLocalPresentation() {
   void syncOutgoingLocalAudio().catch((error) => showToast(errorMessage(error, 'Could not preserve microphone audio.'), 'error'));
   void mesh?.setVideoTrack(null);
   session.finishPresentation();
-  if (presenterId) removePresenter(presenterId);
-
-  if (presenterId) {
+  if (localMicrophoneTracks().length) {
+    publishLocalAudioState();
+  } else if (presenterId) {
+    removePresenter(presenterId);
     if (session.isHost) {
       broadcast({ type: 'stream-stopped', presenterId });
       announceSystem('Host', 'stopped sharing.', 'stream-stopped');
@@ -948,10 +964,39 @@ function stopAdditionalAudioCapture(capture = additionalAudioCapture) {
 }
 
 function publishLocalAudioState() {
-  if (!localPresentation) return;
+  const presenterId = signaling?.participantId;
+  if (!presenterId) return;
+  const previous = presenters.get(presenterId);
+  if (!localPresentation && !localMicrophoneTracks().length) {
+    if (previous?.kind !== 'voice') return;
+    removePresenter(presenterId);
+    if (session.isHost) {
+      broadcast({ type: 'stream-stopped', presenterId });
+      announceSystem('Host', 'stopped transmitting voice.', 'stream-stopped');
+    } else {
+      viewerControl?.send({ type: 'stop-presenting' });
+    }
+    return;
+  }
   const presenter = localPresenterInfo();
-  const previous = presenters.get(presenter.id);
   upsertPresenter(presenter);
+  if (!previous || previous.kind !== presenter.kind) {
+    if (session.isHost) {
+      broadcast({ type: 'stream-started', presenter });
+      const transition = previous?.kind === 'screen'
+        ? 'stopped sharing the screen; microphone remains on.'
+        : 'started transmitting voice.';
+      announceSystem('Host', transition, 'audio');
+    } else {
+      viewerControl?.send({
+        type: 'stream-started',
+        kind: presenter.kind,
+        streamSettings: presenter.settings,
+        audioEnabled: presenter.audioEnabled,
+      });
+    }
+    return;
+  }
   if (previous?.audioEnabled === presenter.audioEnabled) return;
   if (session.isHost) {
     broadcast({ type: 'stream-audio', presenter });
@@ -1102,7 +1147,8 @@ async function toggleLocalMicrophone() {
 
 function upsertPresenter(presenter: PresenterInfo) {
   const previous = presenters.get(presenter.id);
-  if (previous && previous.settings.codec !== presenter.settings.codec) {
+  if (previous && (previous.kind !== presenter.kind
+    || (presenter.kind === 'screen' && previous.settings.codec !== presenter.settings.codec))) {
     incomingTextReceivers.get(presenter.id)?.close();
     incomingTextReceivers.delete(presenter.id);
     streamGrid.querySelector(`[data-presenter-id="${CSS.escape(presenter.id)}"]`)?.remove();
@@ -1130,19 +1176,27 @@ function removePresenter(presenterId: string) {
 function renderStreamCard(presenter: PresenterInfo) {
   let card = streamGrid.querySelector<HTMLElement>(`[data-presenter-id="${CSS.escape(presenter.id)}"]`);
   const isLocal = presenter.id === signaling?.participantId;
+  const voiceOnly = presenter.kind === 'voice';
   if (!card) {
     card = document.createElement('article');
     card.className = 'stream-card connecting';
     card.dataset.presenterId = presenter.id;
     const media = document.createElement('div');
     media.className = 'stream-card-media';
-    const visual = document.createElement(isLocal || presenter.settings.codec === NATIVE_VIDEO_CODEC_ID ? 'video' : 'canvas');
-    visual.setAttribute('playsinline', '');
-    if (visual instanceof HTMLVideoElement) {
-      visual.autoplay = true;
-      // Audio uses a dedicated element. Muting the video sink allows playback
-      // in duplicated and background tabs without fresh user activation.
-      visual.muted = true;
+    const visual = voiceOnly
+      ? document.createElement('div')
+      : document.createElement(isLocal || presenter.settings.codec === NATIVE_VIDEO_CODEC_ID ? 'video' : 'canvas');
+    if (voiceOnly) {
+      visual.className = 'voice-avatar-stage';
+      visual.innerHTML = '<span class="voice-avatar" aria-hidden="true"></span><strong>Microphone live</strong>';
+    } else {
+      visual.setAttribute('playsinline', '');
+      if (visual instanceof HTMLVideoElement) {
+        visual.autoplay = true;
+        // Audio uses a dedicated element. Muting the video sink allows playback
+        // in duplicated and background tabs without fresh user activation.
+        visual.muted = true;
+      }
     }
     const loading = document.createElement('div');
     loading.className = 'stream-connecting';
@@ -1168,7 +1222,11 @@ function renderStreamCard(presenter: PresenterInfo) {
   }
   card.classList.toggle('local-stream', isLocal);
   card.classList.toggle('host-stream', presenter.isHost);
+  card.classList.toggle('voice-only', voiceOnly);
+  card.dataset.kind = presenter.kind;
+  if (voiceOnly) card.classList.remove('connecting');
   const avatar = card.querySelector('.stream-avatar');
+  const voiceAvatar = card.querySelector('.voice-avatar');
   const name = card.querySelector('.stream-person strong');
   const settings = card.querySelector('.stream-person small');
   const audioState = card.querySelector('.audio-state');
@@ -1179,10 +1237,14 @@ function renderStreamCard(presenter: PresenterInfo) {
     avatar.className = `stream-avatar color-${identity.color}`;
     avatar.textContent = identity.emoji;
   }
+  if (voiceAvatar) {
+    voiceAvatar.className = `voice-avatar color-${identity.color}${presenter.isHost ? ' host' : ''}`;
+    voiceAvatar.textContent = identity.emoji;
+  }
   if (name) name.textContent = formatParticipantLabel(presenter.name, { isHost: presenter.isHost, isLocal });
-  if (settings) settings.textContent = presenter.settings.label;
+  if (settings) settings.textContent = voiceOnly ? 'Voice transmission · microphone on' : presenter.settings.label;
   if (audioState) {
-    audioState.textContent = presenter.audioEnabled ? 'Audio on' : 'No audio';
+    audioState.textContent = presenter.audioEnabled ? voiceOnly ? 'Voice on' : 'Audio on' : 'No audio';
     audioState.classList.toggle('off', !presenter.audioEnabled);
   }
   updateMuteButton(presenter.id);

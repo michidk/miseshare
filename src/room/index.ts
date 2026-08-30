@@ -9,6 +9,7 @@ export type {
   ChatMessage,
   HostRoomMessage,
   ParticipantInfo,
+  PresenterKind,
   PresenterInfo,
   RoomStreamSettings,
   RoomConnectionState,
