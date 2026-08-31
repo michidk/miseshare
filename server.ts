@@ -54,7 +54,7 @@ app.use((_, response, next) => {
     'Referrer-Policy': 'no-referrer',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
-    'Permissions-Policy': 'camera=(), microphone=(), display-capture=(self)',
+    'Permissions-Policy': 'camera=(), microphone=(self), display-capture=(self)',
     'Content-Security-Policy': contentSecurityPolicy(),
   });
   next();

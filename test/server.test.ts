@@ -234,6 +234,7 @@ test('serves the app and public client configuration', async () => {
   assert.match(appClientSource, /text-keyframe-request/);
   assert.equal(landing.status, 200);
   assert.equal(landing.headers.get('cache-control'), 'no-store');
+  assert.equal(requiredHeader(landing, 'permissions-policy'), 'camera=(), microphone=(self), display-capture=(self)');
   assert.ok(landing.headers.get('x-request-id'));
   const landingPolicy = requiredHeader(landing, 'content-security-policy');
   const landingPage = await landing.text();

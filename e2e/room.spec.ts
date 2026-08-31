@@ -309,6 +309,28 @@ test('voice-only microphone and screen audio can be shared and stopped independe
   await viewer.close();
 });
 
+test('microphone permission denial explains how to enable access', async ({ page }) => {
+  await page.goto('/?test');
+  await page.locator('#share-button').click();
+  await expect(page).toHaveURL(/\/room\/[a-z2-9]{4}-[a-z2-9]{4}$/);
+  await expect(page.locator('#local-microphone-button')).toBeEnabled();
+
+  await page.evaluate(() => {
+    const mediaDevices = navigator.mediaDevices ?? {};
+    if (!navigator.mediaDevices) Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: mediaDevices });
+    Object.defineProperty(mediaDevices, 'getUserMedia', {
+      configurable: true,
+      value: async () => { throw new DOMException('Permission denied', 'NotAllowedError'); },
+    });
+  });
+
+  await page.locator('#local-microphone-button').click();
+  await expect(page.locator('#toast')).toContainText(
+    'Microphone access was blocked. Allow microphone access in your browser settings and try again.',
+  );
+  await expect(page.locator('#local-microphone-button')).toHaveAttribute('title', 'Share microphone');
+});
+
 test('the host receives a native stream started by an existing same-context tab', async ({ page }) => {
   await page.goto('/?test');
   await page.locator('#share-button').click();

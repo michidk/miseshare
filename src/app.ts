@@ -1122,7 +1122,11 @@ async function startLocalMicrophone() {
   } catch (error) {
     if (capture) stopLocalMicrophoneCapture(capture);
     try { await syncOutgoingLocalAudio(); } catch {}
-    if (errorName(error) !== 'NotAllowedError') showToast(errorMessage(error, 'Could not share the microphone.'), 'error');
+    if (errorName(error) === 'NotAllowedError') {
+      showToast('Microphone access was blocked. Allow microphone access in your browser settings and try again.', 'error');
+    } else {
+      showToast(errorMessage(error, 'Could not share the microphone.'), 'error');
+    }
   } finally {
     microphoneCapturePending = false;
     updateRoomUI();
