@@ -23,7 +23,9 @@ async function createServerRuntime() {
     participantCapacity: environment.participantCapacity,
     rateLimiting: environment.rateLimiting,
   })
-  await roomApi.migrate()
+  // Vercel functions do not package the repository's Drizzle migration files. Production
+  // migrations run explicitly through `bun run db:migrate` before deployment instead.
+  if (environment.migrateOnStartup) await roomApi.migrate()
 
   return {
     environment,

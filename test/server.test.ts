@@ -134,6 +134,16 @@ test('rejects an undersized admin session secret', () => {
   );
 });
 
+test('leaves database migrations to the explicit deployment step on Vercel', () => {
+  const environment = parseServerEnvironment({
+    DATABASE_URL: 'postgresql://example.test/db',
+    ADMIN_PASSWORD: 'test-password',
+    ADMIN_SESSION_SECRET: 'test-admin-session-secret-with-enough-entropy',
+    VERCEL: '1',
+  });
+  assert.equal(environment.migrateOnStartup, false);
+});
+
 test('uses Google STUN and keeps trusted head origins disabled when optional configuration is unset', async () => {
   const port = await getAvailablePort();
   const { STUN_URLS: _, VITE_HEAD_HTML: __, ...env } = process.env;
