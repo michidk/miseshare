@@ -204,6 +204,9 @@ test('serves the app and public client configuration', async () => {
   const configResponse = await fetch(`${baseUrl}/config`);
   const config = await configResponse.json() as { iceServers: IceServerConfig[] };
   const favicon = await fetch(`${baseUrl}/favicon.svg`);
+  const socialThumbnail = await fetch(`${baseUrl}/social-thumbnail.png`);
+  const robots = await fetch(`${baseUrl}/robots.txt`);
+  const sitemap = await fetch(`${baseUrl}/sitemap.xml`);
   const appClient = await fetch(`${baseUrl}/app.js`);
   assert.equal(appClient.headers.get('cache-control'), 'no-store');
   const appClientSource = await appClient.text();
@@ -220,6 +223,13 @@ test('serves the app and public client configuration', async () => {
   assert.equal(favicon.status, 200);
   assert.match(requiredHeader(favicon, 'content-type'), /image\/svg\+xml/);
   assert.match(requiredHeader(favicon, 'cache-control'), /max-age=0/);
+  assert.equal(socialThumbnail.status, 200);
+  assert.match(requiredHeader(socialThumbnail, 'content-type'), /image\/png/);
+  assert.equal(robots.status, 200);
+  assert.match(await robots.text(), /Sitemap: https:\/\/miseshare\.vercel\.app\/sitemap\.xml/);
+  assert.equal(sitemap.status, 200);
+  assert.match(requiredHeader(sitemap, 'content-type'), /application\/xml/);
+  assert.match(await sitemap.text(), /<loc>https:\/\/miseshare\.vercel\.app\/<\/loc>/);
   assert.ok(config.iceServers.every(({ urls }) => {
     const candidates = Array.isArray(urls) ? urls : [urls];
     return candidates.every((url) => url.startsWith('stun:'));
@@ -242,12 +252,21 @@ test('serves the app and public client configuration', async () => {
   assert.match(landingPolicy, /img-src 'self' data: https:/);
   assert.match(landingPolicy, /script-src 'self' https: 'unsafe-inline'/);
   assert.match(landingPage, /<base href="\.\/" \/>/);
+  assert.match(landingPage, /<title>miseshare — Free Peer-to-Peer Screen Sharing<\/title>/);
+  assert.match(landingPage, /<link rel="canonical" href="https:\/\/miseshare\.vercel\.app\/" \/>/);
+  assert.match(landingPage, /<meta name="robots" content="index, follow,/);
+  assert.match(landingPage, /<meta property="og:image" content="https:\/\/miseshare\.vercel\.app\/social-thumbnail\.png" \/>/);
+  assert.match(landingPage, /<meta name="twitter:card" content="summary_large_image" \/>/);
+  assert.match(landingPage, /"@type": "WebApplication"/);
   assert.ok(landingPage.includes(`${headHtml}\n  </head>`));
   assert.match(landingPage, /<noscript><img src="https:\/\/www\.facebook\.com\/tr\?id=test"/);
   assert.equal(room.status, 200);
   const page = await room.text();
   assert.ok(page.includes(`${headHtml}\n  </head>`));
   assert.match(page, /<base href="\.\.\/" \/>/);
+  assert.equal(room.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
+  assert.match(page, /<meta name="robots" content="noindex, nofollow, noarchive" \/>/);
+  assert.doesNotMatch(page, /<meta name="robots" content="index, follow,/);
   assert.match(page, /Create a room/);
   assert.match(page, /Start room/);
   assert.match(page, /id="join-form"/);
