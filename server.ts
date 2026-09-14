@@ -135,8 +135,8 @@ app.use(BASE_PATH || '/', express.static(publicDirectory, {
     if (/\.(?:html|js|css)$/.test(filePath)) response.setHeader('Cache-Control', 'no-store');
   },
 }));
-app.get(route('/'), (_, response) => sendAppHtml(response, './'));
-app.get(route('/room/:roomId'), (_, response) => sendAppHtml(response, '../'));
+app.get(route('/'), (_, response) => sendAppHtml(response, './', true));
+app.get(route('/room/:roomId'), (_, response) => sendAppHtml(response, '../', false));
 
 if (!process.env.VERCEL) {
   server.listen(PORT, HOST, () => {
@@ -163,14 +163,21 @@ function route(pathname: string): string {
   return `${BASE_PATH}${pathname}`;
 }
 
-function sendAppHtml(response: Response, baseHref: string) {
+function sendAppHtml(response: Response, baseHref: string, indexable: boolean) {
   response.set('Content-Security-Policy', contentSecurityPolicy(Boolean(headHtml)));
   response.set('Cache-Control', 'no-store');
-  response.type('html').send(appHtml(baseHref));
+  if (!indexable) response.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  response.type('html').send(appHtml(baseHref, indexable));
 }
 
-function appHtml(baseHref: string): string {
-  const html = indexHtml.replace('<base href="/" />', `<base href="${baseHref}" />`);
+function appHtml(baseHref: string, indexable: boolean): string {
+  let html = indexHtml.replace('<base href="/" />', `<base href="${baseHref}" />`);
+  if (!indexable) {
+    html = html.replace(
+      '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />',
+      '<meta name="robots" content="noindex, nofollow, noarchive" />',
+    );
+  }
   if (!headHtml) return html;
   return html.replace('</head>', `${headHtml}\n  </head>`);
 }
