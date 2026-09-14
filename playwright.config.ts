@@ -20,7 +20,7 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   webServer: externalBaseURL ? undefined : {
-    command: 'npm start',
+    command: 'bun run start',
     url: `${baseURL}/health/ready`,
     reuseExistingServer: false,
     timeout: 120_000,

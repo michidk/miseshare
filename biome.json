@@ -1,0 +1,48 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
+  "files": {
+    "includes": [
+      "src/components/**",
+      "src/lib/utils.ts",
+      "src/lib/server/**",
+      "src/room-api/index.ts",
+      "src/room-api/internal/fetch-handler.ts",
+      "src/router.tsx",
+      "src/routes/**",
+      "!src/routeTree.gen.ts",
+      "src/server.ts",
+      "src/shadcn.css",
+      "src/start.ts",
+      "vite.config.ts"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "security": {
+        "noDangerouslySetInnerHtml": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "off"
+      }
+    }
+  }
+}

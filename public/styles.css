@@ -15,7 +15,7 @@
 
 * { box-sizing: border-box; }
 
-html, body { min-height: 100%; }
+html, body { min-height: 100%; overflow-x: hidden; }
 
 body {
   margin: 0;

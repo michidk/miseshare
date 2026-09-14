@@ -1,16 +1,22 @@
 {
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": [".output", "node_modules", "public/app.js", "public/admin.js"],
   "compilerOptions": {
-    "allowJs": false,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "lib": ["DOM", "DOM.Iterable", "ES2024"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
     "noEmit": true,
     "skipLibCheck": true,
     "strict": true,
-    "target": "ES2024",
-    "types": ["node"]
-  },
-  "include": ["server.ts", "playwright.config.ts", "scripts/**/*.ts", "src/**/*.ts", "test/**/*.ts", "e2e/**/*.ts"]
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  }
 }

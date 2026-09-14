@@ -12,18 +12,18 @@ If a connection fails, use the in-room connection check or [icecheck](https://gi
 
 Native WebRTC video tracks carry the 720p, 1080p, and 60 fps screen-sharing presets over encrypted browser connections. A configured TURN server can relay that encrypted traffic when a direct path is unavailable. A separate lossless text mode sends pixel-exact tile deltas over WebRTC data channels. File drops use a dedicated reliable data channel, begin only after each recipient accepts, and never upload file contents to the service. A small REST API stores temporary room admission and WebRTC signaling messages in PostgreSQL; it never receives screen, chat, audio, or file data.
 
-The Node server and browser application are authored in strict TypeScript. The client build compiles `src/app.ts` to the browser bundle in `public/app.js`.
+The application is authored in strict TypeScript on Bun. TanStack Start and React 19 provide server rendering and file-based routing, Nitro serves the production app and API handlers, and shadcn's Base UI primitives sit underneath the custom Miseshare interface. Drizzle ORM owns the PostgreSQL schema and migrations.
 
 ## Run it locally
 
 ```bash
-npm install
-npm run db:up
+bun install
+bun run db:up
 export DATABASE_URL='postgresql://miseshare:miseshare@127.0.0.1:54329/miseshare'
 export ADMIN_PASSWORD='choose-a-strong-local-password'
 export ADMIN_SESSION_SECRET='generate-at-least-32-random-bytes'
-npm run db:migrate
-npm run dev
+bun run db:migrate
+bun run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Screen capture works on `localhost`; a deployed instance must use HTTPS.
@@ -33,23 +33,23 @@ Local development uses the PostgreSQL service in `compose.yaml`, bound to loopba
 After changing the schema, generate and validate a migration before applying it:
 
 ```bash
-npm run db:generate
-npm run db:check
-npm run db:migrate
+bun run db:generate
+bun run db:check
+bun run db:migrate
 ```
 
 ## Deploy to Vercel
 
-Provision a Neon PostgreSQL database from the Vercel Marketplace, connect it to the project, and run the migration with the production `DATABASE_URL`. The repository exports its Express HTTP server for Vercel and keeps the local `npm start` entrypoint:
+Provision a Neon PostgreSQL database from the Vercel Marketplace, connect it to the project, and run the migration with the production `DATABASE_URL`. `bun run build` selects Nitro's Vercel preset when Vercel sets its build environment; outside Vercel it emits the Bun production server at `.output/server/index.mjs` for `bun run start`.
 
 ```bash
-npx vercel@latest env pull .env.production.local --environment=production
+bunx vercel@latest env pull .env.production.local --environment=production
 set -a && source .env.production.local && set +a
-npm run db:migrate
-npx vercel@latest --prod
+bun run db:migrate
+bunx vercel@latest --prod
 ```
 
-Vercel serves files in `public/` from its CDN and runs the room REST API as stateless Node Functions. Every invocation reads the same PostgreSQL room and signaling tables, so participants do not need to reach the same Function instance. `DATABASE_URL` is mandatory on Vercel; the server fails fast instead of silently creating instance-local rooms.
+Vercel serves the Nitro output and public assets from its CDN and runs the room REST API as stateless functions. Every invocation reads the same PostgreSQL room and signaling tables, so participants do not need to reach the same function instance. `DATABASE_URL` is mandatory on Vercel; the server fails fast instead of silently creating instance-local rooms.
 
 ## Configuration
 
@@ -111,14 +111,14 @@ The full-mesh layout is ideal for small groups. Its bandwidth and connection cou
 
 `GET /health/live` checks the process; `GET /health/ready` (and the compatibility endpoint `GET /health`) checks PostgreSQL readiness. Successful requests include an `X-Request-Id` header. The `/admin` dashboard paginates in PostgreSQL and intentionally redacts password hashes, participant tokens, and signaling payloads.
 
-Run the normal verification suite with `npm run verify`. To include the two-browser room flow and mobile-layout checks in Chromium and Firefox, install the browsers once and run the full suite:
+Run the normal verification suite with `bun run verify`. To include the two-browser room flow and mobile-layout checks in Chromium and Firefox, install the browsers once and run the full suite:
 
 ```bash
-npx playwright install chromium firefox
-npm run verify:full
+bunx playwright install chromium firefox
+bun run verify:full
 ```
 
-Browser screenshots, videos, traces, and reports stay under `.playwright/`. CI also checks production dependency advisories and fails when generated browser bundles drift from their TypeScript sources.
+Browser screenshots, videos, traces, and reports stay under `.playwright/`. CI also checks production dependency advisories and verifies that TanStack Router's generated route tree is current.
 
 ## License
 

@@ -29,11 +29,11 @@ jobs:
       DATABASE_URL: postgresql://miseshare:miseshare@127.0.0.1:5432/miseshare
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium firefox
-      - run: npm audit --omit=dev --audit-level=high
-      - run: npm run verify:full
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium firefox
+      - run: bun audit --production
+      - run: bun run verify:full
+      - run: git diff --exit-code -- src/routeTree.gen.ts

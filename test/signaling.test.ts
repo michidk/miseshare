@@ -6,10 +6,10 @@ test('browser departure uses an independent keepalive request for a viewer', asy
   const originalFetch = globalThis.fetch;
   context.after(() => { globalThis.fetch = originalFetch; });
   let request: { url: string; init?: RequestInit } | undefined;
-  globalThis.fetch = async (input, init) => {
+  globalThis.fetch = (async (input, init) => {
     request = { url: String(input), init };
     return new Response(null, { status: 204 });
-  };
+  }) as typeof fetch;
   const session = new RestSignalingSession('/api', {
     roomId: 'room-test',
     participant: { id: 'guest-12345', name: 'Guest', isHost: false },
@@ -31,10 +31,10 @@ test('browser departure closes the room when the host leaves', async (context) =
   const originalFetch = globalThis.fetch;
   context.after(() => { globalThis.fetch = originalFetch; });
   let url = '';
-  globalThis.fetch = async (input) => {
+  globalThis.fetch = (async (input) => {
     url = String(input);
     return new Response(null, { status: 204 });
-  };
+  }) as typeof fetch;
   const session = new RestSignalingSession('/api', {
     roomId: 'room-test',
     participant: { id: 'host-12345', name: 'Host', isHost: true },

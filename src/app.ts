@@ -119,8 +119,7 @@ const roomStatus = $('#room-status');
 const joinPasswordDialog = $<HTMLDialogElement>('#join-password-dialog');
 const joinPasswordInput = $<HTMLInputElement>('#join-password');
 const joinPasswordError = $('#join-password-error');
-const appBaseUrl = new URL(document.baseURI);
-const appBasePath = appBaseUrl.pathname.replace(/\/$/, '');
+const appBasePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const streamTestMode = new URLSearchParams(location.search).has('test');
 const chatEmoteRenderer = buildChatEmoteRenderer(appPath('emotes'));
 const roomNotifications = buildRoomNotificationController($('#notification-toaster'));
@@ -1884,7 +1883,7 @@ function cancelConnectivityRequests(message: string) {
 }
 
 function connectivityProbeId() {
-  return `probe-${crypto.randomUUID()}`;
+  return `probe-${randomId()}`;
 }
 
 function median(values: number[]) {
@@ -2195,7 +2194,13 @@ function announceSystem(author: string, text: string, activity: ActivityKind) {
 }
 
 function makeId() {
-  return crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+  return randomId();
+}
+
+function randomId() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function rememberChatEntry(entry: ChatEntry) {

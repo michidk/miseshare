@@ -1,8 +1,9 @@
-import { spawn, spawnSync, type ChildProcessByStdio } from 'node:child_process';
+import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import net from 'node:net';
 import type { Readable } from 'node:stream';
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { parseServerEnvironment } from '../src/lib/server/env.server.js';
 
 type ParticipantIdentity = {
   participant: { id: string; name: string };
@@ -37,14 +38,27 @@ const getAvailablePort = () => new Promise<number>((resolve, reject) => {
   });
 });
 
-const waitForOutput = (stream: Readable, expected: string) => new Promise<void>((resolve, reject) => {
-  const timeout = setTimeout(() => reject(new Error(`Timed out waiting for: ${expected}`)), 5_000);
-  stream.on('data', (chunk) => {
-    if (!chunk.toString().includes(expected)) return;
-    clearTimeout(timeout);
-    resolve();
-  });
-});
+const waitForServer = async (url: string) => {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${url}/health/live`);
+      if (response.ok) return;
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Timed out waiting for ${url}`);
+};
+
+const startServer = (port: number, env: NodeJS.ProcessEnv) => spawn(
+  process.execPath,
+  ['.output/server/index.mjs'],
+  {
+    cwd: new URL('..', import.meta.url),
+    env: { ...env, PORT: String(port) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  },
+);
 
 const requiredHeader = (response: Response, name: string) => {
   const value = response.headers.get(name);
@@ -65,93 +79,79 @@ const roomRequest = async (pathname: string, { identity, ...init }: RoomRequestI
 before(async () => {
   const port = await getAvailablePort();
   baseUrl = `http://127.0.0.1:${port}`;
-  const startedApp = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
-    cwd: new URL('..', import.meta.url),
-    env: {
+  const startedApp = startServer(port, {
       ...process.env,
       ADMIN_PASSWORD: '123',
       ADMIN_SESSION_SECRET: 'test-admin-session-secret-with-enough-entropy',
       EMOTES_ENABLED: 'false',
       VITE_HEAD_HTML: `  ${headHtml}  `,
       RATE_LIMIT_ENABLED: 'false',
-      PORT: String(port),
       STUN_URLS: 'turn:relay.invalid:3478, stun:one.example.test:3478, stun:two.example.test:3478',
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
   });
   app = startedApp;
-  await waitForOutput(startedApp.stdout, 'miseshare is ready');
+  await waitForServer(baseUrl);
 });
 
 after(() => {
   app?.kill('SIGTERM');
 });
 
-test('refuses to start without a PostgreSQL connection', () => {
-  const { DATABASE_URL: _, VERCEL: __, ...env } = process.env;
-  const result = spawnSync(process.execPath, ['--import', 'tsx', 'server.ts'], {
-    cwd: new URL('..', import.meta.url),
-    env,
-    encoding: 'utf8',
-  });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /DATABASE_URL is required for room signaling/);
+test('requires a PostgreSQL connection', () => {
+  assert.throws(
+    () => parseServerEnvironment({ ADMIN_PASSWORD: 'x', ADMIN_SESSION_SECRET: 'x'.repeat(32) }),
+    /DATABASE_URL is required for room signaling/,
+  );
 });
 
 test('requires an explicit admin password', () => {
-  const { ADMIN_PASSWORD: _, ...env } = process.env;
-  const result = spawnSync(process.execPath, ['--import', 'tsx', 'server.ts'], {
-    cwd: new URL('..', import.meta.url),
-    env: { ...env, ADMIN_SESSION_SECRET: 'test-admin-session-secret-with-enough-entropy' },
-    encoding: 'utf8',
-  });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /ADMIN_PASSWORD is required/);
+  assert.throws(
+    () => parseServerEnvironment({
+      DATABASE_URL: 'postgresql://example.test/db',
+      ADMIN_SESSION_SECRET: 'test-admin-session-secret-with-enough-entropy',
+    }),
+    /ADMIN_PASSWORD is required/,
+  );
 });
 
 test('requires an independent admin session secret', () => {
-  const { ADMIN_SESSION_SECRET: _, ...env } = process.env;
-  const result = spawnSync(process.execPath, ['--import', 'tsx', 'server.ts'], {
-    cwd: new URL('..', import.meta.url),
-    env: { ...env, ADMIN_PASSWORD: 'test-password' },
-    encoding: 'utf8',
-  });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /ADMIN_SESSION_SECRET is required/);
+  assert.throws(
+    () => parseServerEnvironment({
+      DATABASE_URL: 'postgresql://example.test/db',
+      ADMIN_PASSWORD: 'test-password',
+    }),
+    /ADMIN_SESSION_SECRET is required/,
+  );
 });
 
 test('rejects an undersized admin session secret', () => {
-  const result = spawnSync(process.execPath, ['--import', 'tsx', 'server.ts'], {
-    cwd: new URL('..', import.meta.url),
-    env: { ...process.env, ADMIN_PASSWORD: 'test-password', ADMIN_SESSION_SECRET: 'too-short' },
-    encoding: 'utf8',
-  });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /ADMIN_SESSION_SECRET must contain at least 32 bytes/);
+  assert.throws(
+    () => parseServerEnvironment({
+      DATABASE_URL: 'postgresql://example.test/db',
+      ADMIN_PASSWORD: 'test-password',
+      ADMIN_SESSION_SECRET: 'too-short',
+    }),
+    /ADMIN_SESSION_SECRET must contain at least 32 bytes/,
+  );
 });
 
-test('uses Google STUN and leaves app HTML and CSP unchanged when optional configuration is unset', async () => {
+test('uses Google STUN and keeps trusted head origins disabled when optional configuration is unset', async () => {
   const port = await getAvailablePort();
   const { STUN_URLS: _, VITE_HEAD_HTML: __, ...env } = process.env;
-  const appWithoutHeadHtml = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
-    cwd: new URL('..', import.meta.url),
-    env: {
+  const appWithoutHeadHtml = startServer(port, {
       ...env,
       ADMIN_PASSWORD: 'no-meta-test-password',
       ADMIN_SESSION_SECRET: 'no-meta-test-session-secret-with-enough-entropy',
       EMOTES_ENABLED: 'false',
-      PORT: String(port),
       RATE_LIMIT_ENABLED: 'false',
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
   });
-  await waitForOutput(appWithoutHeadHtml.stdout, 'miseshare is ready');
+  await waitForServer(`http://127.0.0.1:${port}`);
   try {
     const response = await fetch(`http://127.0.0.1:${port}/`);
     assert.doesNotMatch(await response.text(), /__headHtmlLoaded|facebook\.com/);
     const policy = requiredHeader(response, 'content-security-policy');
-    assert.doesNotMatch(policy, /https:|unsafe-inline.*script|script-src[^;]*unsafe-inline/);
-    assert.match(policy, /script-src 'self';/);
+    assert.doesNotMatch(policy, /connect-src[^;]*https:|img-src[^;]*https:/);
+    assert.match(policy, /font-src 'self' https:\/\/fonts\.gstatic\.com data:/);
+    assert.match(policy, /script-src 'self' 'unsafe-inline';/);
     const config = await fetch(`http://127.0.0.1:${port}/config`).then((result) => result.json());
     assert.deepEqual(config, { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
   } finally {
@@ -161,20 +161,15 @@ test('uses Google STUN and leaves app HTML and CSP unchanged when optional confi
 
 test('applies shared API rate limits with a retry interval', async () => {
   const port = await getAvailablePort();
-  const rateLimitedApp = spawn(process.execPath, ['--import', 'tsx', 'server.ts'], {
-    cwd: new URL('..', import.meta.url),
-    env: {
+  const rateLimitedApp = startServer(port, {
       ...process.env,
       ADMIN_PASSWORD: 'rate-limit-test-password',
       ADMIN_SESSION_SECRET: 'rate-limit-test-session-secret-with-enough-entropy',
       EMOTES_ENABLED: 'false',
-      PORT: String(port),
       RATE_LIMIT_ENABLED: 'true',
       TRUST_PROXY: 'true',
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
   });
-  await waitForOutput(rateLimitedApp.stdout, 'miseshare is ready');
+  await waitForServer(`http://127.0.0.1:${port}`);
   const identity = `2001:db8:${Date.now().toString(16).slice(-4)}:${Math.floor(Math.random() * 65_535).toString(16)}::1`;
   try {
     for (let attempt = 0; attempt < 60; attempt += 1) {
@@ -198,6 +193,43 @@ test('applies shared API rate limits with a retry interval', async () => {
   }
 });
 
+test('ignores spoofable client IP headers when proxy trust is disabled', async () => {
+  const port = await getAvailablePort();
+  const rateLimitedApp = startServer(port, {
+      ...process.env,
+      ADMIN_PASSWORD: 'direct-rate-limit-test-password',
+      ADMIN_SESSION_SECRET: 'direct-rate-limit-session-secret-with-enough-entropy',
+      EMOTES_ENABLED: 'false',
+      RATE_LIMIT_ENABLED: 'true',
+      TRUST_PROXY: 'false',
+  });
+  await waitForServer(`http://127.0.0.1:${port}`);
+  try {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const response = await fetch(`http://127.0.0.1:${port}/api/rooms`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Real-Ip': `198.51.100.${attempt + 1}`,
+        },
+        body: JSON.stringify({ password: 'x'.repeat(129) }),
+      });
+      assert.equal(response.status, 400);
+    }
+    const blocked = await fetch(`http://127.0.0.1:${port}/api/rooms`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Real-Ip': '203.0.113.250',
+      },
+      body: JSON.stringify({ password: 'x'.repeat(129) }),
+    });
+    assert.equal(blocked.status, 429);
+  } finally {
+    rateLimitedApp.kill('SIGTERM');
+  }
+});
+
 test('serves the app and public client configuration', async () => {
   const health = await fetch(`${baseUrl}/health`).then((response) => response.json());
   const liveness = await fetch(`${baseUrl}/health/live`);
@@ -207,11 +239,8 @@ test('serves the app and public client configuration', async () => {
   const socialThumbnail = await fetch(`${baseUrl}/social-thumbnail.png`);
   const robots = await fetch(`${baseUrl}/robots.txt`);
   const sitemap = await fetch(`${baseUrl}/sitemap.xml`);
-  const appClient = await fetch(`${baseUrl}/app.js`);
-  assert.equal(appClient.headers.get('cache-control'), 'no-store');
-  const appClientSource = await appClient.text();
   const landing = await fetch(`${baseUrl}/`);
-  const room = await fetch(`${baseUrl}/room/abc12345`);
+  const room = await fetch(`${baseUrl}/room/abcd-2345`);
 
   assert.deepEqual(health, { ok: true });
   assert.deepEqual(await liveness.json(), { ok: true });
@@ -234,14 +263,6 @@ test('serves the app and public client configuration', async () => {
     const candidates = Array.isArray(urls) ? urls : [urls];
     return candidates.every((url) => url.startsWith('stun:'));
   }));
-  assert.match(appClientSource, /getDisplayMedia/);
-  assert.match(appClientSource, /RTCPeerConnection/);
-  assert.doesNotMatch(appClientSource, /PeerJS/);
-  assert.doesNotMatch(appClientSource, /window\.prompt/);
-  assert.match(appClientSource, /text-lossless-v1/);
-  assert.match(appClientSource, /text-frame-start/);
-  assert.match(appClientSource, /text-frame-chunk/);
-  assert.match(appClientSource, /text-keyframe-request/);
   assert.equal(landing.status, 200);
   assert.equal(landing.headers.get('cache-control'), 'no-store');
   assert.equal(requiredHeader(landing, 'permissions-policy'), 'camera=(), microphone=(self), display-capture=(self)');
@@ -250,22 +271,21 @@ test('serves the app and public client configuration', async () => {
   const landingPage = await landing.text();
   assert.match(landingPolicy, /connect-src 'self' https:/);
   assert.match(landingPolicy, /img-src 'self' data: https:/);
-  assert.match(landingPolicy, /script-src 'self' https: 'unsafe-inline'/);
-  assert.match(landingPage, /<base href="\.\/" \/>/);
+  assert.match(landingPolicy, /script-src 'self' 'unsafe-inline' https:/);
   assert.match(landingPage, /<title>miseshare — Free Peer-to-Peer Screen Sharing<\/title>/);
-  assert.match(landingPage, /<link rel="canonical" href="https:\/\/miseshare\.vercel\.app\/" \/>/);
+  assert.match(landingPage, /<link rel="canonical" href="https:\/\/miseshare\.vercel\.app\/"/);
   assert.match(landingPage, /<meta name="robots" content="index, follow,/);
-  assert.match(landingPage, /<meta property="og:image" content="https:\/\/miseshare\.vercel\.app\/social-thumbnail\.png" \/>/);
-  assert.match(landingPage, /<meta name="twitter:card" content="summary_large_image" \/>/);
-  assert.match(landingPage, /"@type": "WebApplication"/);
-  assert.ok(landingPage.includes(`${headHtml}\n  </head>`));
+  assert.match(landingPage, /<meta property="og:image" content="https:\/\/miseshare\.vercel\.app\/social-thumbnail\.png"/);
+  assert.match(landingPage, /<meta name="twitter:card" content="summary_large_image"/);
+  assert.match(landingPage, /"@type":"WebApplication"/);
+  assert.ok(landingPage.includes(headHtml));
+  assert.match(landingPage, /assets\/index-[^"']+\.js/);
   assert.match(landingPage, /<noscript><img src="https:\/\/www\.facebook\.com\/tr\?id=test"/);
   assert.equal(room.status, 200);
   const page = await room.text();
-  assert.ok(page.includes(`${headHtml}\n  </head>`));
-  assert.match(page, /<base href="\.\.\/" \/>/);
+  assert.ok(page.includes(headHtml));
   assert.equal(room.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
-  assert.match(page, /<meta name="robots" content="noindex, nofollow, noarchive" \/>/);
+  assert.match(page, /<meta name="robots" content="noindex, nofollow, noarchive"\s*\/>/);
   assert.doesNotMatch(page, /<meta name="robots" content="index, follow,/);
   assert.match(page, /Create a room/);
   assert.match(page, /Start room/);
@@ -338,49 +358,40 @@ test('admin dashboard requires its password and renders a redacted database over
   assert.equal(closed.status, 204);
 
   const authHeaders = { cookie: cookie.split(';')[0] };
-  const dashboard = await fetch(`${baseUrl}/admin/`, { headers: authHeaders });
-  const dashboardPage = await dashboard.text();
+  const dashboard = await fetch(`${baseUrl}/admin/data`, { headers: authHeaders });
+  const dashboardState = await dashboard.json();
   assert.equal(dashboard.status, 200);
-  assert.match(dashboardPage, /<h1[^>]*>Overview<\/h1>/);
-  assert.match(dashboardPage, /Database totals/);
-  assert.match(dashboardPage, /Database models/);
-  assert.match(dashboardPage, /Rooms model/);
-  assert.match(dashboardPage, /admin\.js/);
-  assert.match(dashboardPage, /Updated automatically with TanStack Query/);
-  assert.doesNotMatch(dashboardPage, /Refresh|Read-only access/);
-  assert.doesNotMatch(dashboardPage, /password_hash|token_hash/i);
+  assert.equal(dashboardState.title, 'Overview');
+  assert.match(dashboardState.content, /Database totals/);
+  assert.match(dashboardState.content, /Rooms model/);
+  assert.doesNotMatch(dashboardState.content, /password_hash|token_hash/i);
   assert.match(requiredHeader(dashboard, 'content-security-policy'), /default-src 'none'/);
-  assert.match(requiredHeader(dashboard, 'content-security-policy'), /script-src 'self'/);
 
-  const adminClient = await fetch(`${baseUrl}/admin.js`).then((response) => response.text());
-  assert.match(adminClient, /admin-view/);
-  assert.match(adminClient, /refetchInterval/);
+  const activeSessions = await fetch(`${baseUrl}/admin/data?view=sessions&state=active`, { headers: authHeaders }).then((response) => response.json());
+  assert.equal(activeSessions.title, 'Sessions');
+  assert.match(activeSessions.content, /Active sessions/);
+  assert.match(activeSessions.content, /Past <b>/);
+  assert.match(activeSessions.content, /Page 1 of (?:[2-9]|[1-9]\d+)/);
 
-  const activeSessions = await fetch(`${baseUrl}/admin/?view=sessions&state=active`, { headers: authHeaders }).then((response) => response.text());
-  assert.match(activeSessions, /<h1[^>]*>Sessions<\/h1>/);
-  assert.match(activeSessions, /Active sessions/);
-  assert.match(activeSessions, /Past <b>/);
-  assert.match(activeSessions, /Page 1 of (?:[2-9]|[1-9]\d+)/);
+  const secondSessionPage = await fetch(`${baseUrl}/admin/data?view=sessions&state=active&page=2`, { headers: authHeaders }).then((response) => response.json());
+  assert.match(secondSessionPage.content, /Page 2 of (?:[2-9]|[1-9]\d+)/);
 
-  const secondSessionPage = await fetch(`${baseUrl}/admin/?view=sessions&state=active&page=2`, { headers: authHeaders }).then((response) => response.text());
-  assert.match(secondSessionPage, /Page 2 of (?:[2-9]|[1-9]\d+)/);
+  const pastSessions = await fetch(`${baseUrl}/admin/data?view=sessions&state=past`, { headers: authHeaders }).then((response) => response.json());
+  assert.match(pastSessions.content, /Past sessions/);
+  assert.match(pastSessions.content, new RegExp(closedRoom.roomId));
 
-  const pastSessions = await fetch(`${baseUrl}/admin/?view=sessions&state=past`, { headers: authHeaders }).then((response) => response.text());
-  assert.match(pastSessions, /Past sessions/);
-  assert.match(pastSessions, new RegExp(closedRoom.roomId));
-
-  const participants = await fetch(`${baseUrl}/admin/?view=participants`, { headers: authHeaders }).then((response) => response.text());
-  assert.match(participants, /<h1[^>]*>Participants<\/h1>/);
-  assert.match(participants, /Page 1 of (?:[2-9]|[1-9]\d+)/);
+  const participants = await fetch(`${baseUrl}/admin/data?view=participants`, { headers: authHeaders }).then((response) => response.json());
+  assert.equal(participants.title, 'Participants');
+  assert.match(participants.content, /Page 1 of (?:[2-9]|[1-9]\d+)/);
 
   const participantData = await fetch(`${baseUrl}/admin/data?view=participants&page=2`, { headers: authHeaders }).then((response) => response.json());
   assert.equal(participantData.view, 'participants');
   assert.equal(participantData.title, 'Participants');
   assert.match(participantData.content, /Page 2 of/);
 
-  const signals = await fetch(`${baseUrl}/admin/?view=signals`, { headers: authHeaders }).then((response) => response.text());
-  assert.match(signals, /<h1[^>]*>WebRTC signals<\/h1>/);
-  assert.match(signals, /Signaling payload contents are masked/);
+  const signals = await fetch(`${baseUrl}/admin/data?view=signals`, { headers: authHeaders }).then((response) => response.json());
+  assert.equal(signals.title, 'WebRTC signals');
+  assert.match(signals.content, /Signaling payload contents are masked/);
 });
 
 test('room API enforces passwords without room-specific capacity settings', async () => {

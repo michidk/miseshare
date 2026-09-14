@@ -36,6 +36,8 @@ interface EmoteSource {
   load(): Promise<RemoteEmote[]>;
 }
 
+type FetchFunction = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+
 interface EmoteServiceOptions {
   enabled?: boolean;
   sources?: EmoteSource[];
@@ -146,7 +148,7 @@ function providerSources(): EmoteSource[] {
   }))];
 }
 
-export function buildTwitchCatalogSource(catalogFetch: typeof fetch = fetch): EmoteSource {
+export function buildTwitchCatalogSource(catalogFetch: FetchFunction = fetch): EmoteSource {
   return {
     async load() {
       const response = await catalogFetch(TWITCH_CATALOG_URL, { headers: { accept: 'application/json' } });

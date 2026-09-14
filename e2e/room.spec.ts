@@ -294,7 +294,9 @@ test('voice-only microphone and screen audio can be shared and stopped independe
     const destination = context.createMediaStreamDestination();
     oscillator.connect(destination);
     oscillator.start();
-    Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+    const mediaDevices = navigator.mediaDevices ?? {};
+    if (!navigator.mediaDevices) Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: mediaDevices });
+    Object.defineProperty(mediaDevices, 'getUserMedia', {
       configurable: true,
       value: async () => new MediaStream([destination.stream.getAudioTracks()[0]]),
     });

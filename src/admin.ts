@@ -1,11 +1,10 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { Router, urlencoded, type Request } from 'express';
 import type { AdminDatabaseSnapshot, AdminSnapshotQuery } from './room-api/index.js';
 
 const SESSION_COOKIE = 'mise_admin_session';
 const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 
-export function createAdminRouter(options: {
+export function createAdminHandler(options: {
   password: string;
   sessionSecret: string;
   basePath: string;
@@ -13,72 +12,123 @@ export function createAdminRouter(options: {
   rateLimit(identity: string): Promise<{ allowed: boolean; retryAfterSeconds: number }>;
   snapshot(query: AdminSnapshotQuery): Promise<AdminDatabaseSnapshot>;
 }) {
-  const router = Router();
-  router.use((_, response, next) => {
-    response.set({
-      'Cache-Control': 'private, no-store',
-      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
-    });
-    next();
-  });
-  router.use('/login', urlencoded({ extended: false, limit: '2kb' }));
+  return async (request: Request, clientIdentity: string): Promise<Response> => {
+    const url = new URL(request.url);
+    const pathname = url.pathname.replace(/\/$/, '');
+    const cookie = request.headers.get('cookie') ?? undefined;
+    if (request.method === 'GET' && pathname.endsWith('/data')) {
+      if (!validSession(cookie, options.sessionSecret)) {
+        return adminJson({ error: 'Admin authentication required.' }, 401);
+      }
+      try {
+        const query = dashboardQuery(Object.fromEntries(url.searchParams));
+        return adminJson(dashboardState(await options.snapshot(query), options.basePath, query));
+      } catch (error) {
+        console.error('Could not load the admin database snapshot.', error);
+        return adminJson({ error: 'The database snapshot could not be loaded.' }, 500);
+      }
+    }
 
-  router.get('/data', async (request, response) => {
-    if (!validSession(request.headers.cookie, options.sessionSecret)) {
-      response.status(401).json({ error: 'Admin authentication required.' });
-      return;
+    if (request.method === 'GET' && pathname === options.basePath) {
+      if (!validSession(cookie, options.sessionSecret)) {
+        return adminHtml(loginPage(options.basePath));
+      }
+      try {
+        const query = dashboardQuery(Object.fromEntries(url.searchParams));
+        return adminHtml(dashboardPage(await options.snapshot(query), options.basePath, query));
+      } catch (error) {
+        console.error('Could not load the admin database snapshot.', error);
+        return adminHtml(
+          page(
+            'Admin unavailable',
+            '<main class="login-shell"><section class="login-card"><span class="eyebrow">miseshare operations</span><h1>Dashboard unavailable</h1><p>The database snapshot could not be loaded. Try again shortly.</p></section></main>',
+          ),
+          500,
+        );
+      }
     }
-    try {
-      const query = dashboardQuery(request.query);
-      response.json(dashboardState(await options.snapshot(query), options.basePath, query));
-    } catch (error) {
-      console.error('Could not load the admin database snapshot.', error);
-      response.status(500).json({ error: 'The database snapshot could not be loaded.' });
-    }
-  });
 
-  router.get('/', async (request, response) => {
-    if (!validSession(request.headers.cookie, options.sessionSecret)) {
-      response.status(200).type('html').send(loginPage(options.basePath));
-      return;
+    if (request.method === 'POST' && pathname.endsWith('/login')) {
+      const contentLength = Number(request.headers.get('content-length') ?? 0);
+      if (contentLength > 2_048) {
+        return adminHtml(
+          loginPage(options.basePath, 'The sign-in request is too large.'),
+          413,
+        );
+      }
+      let limit: Awaited<ReturnType<typeof options.rateLimit>>;
+      try {
+        limit = await options.rateLimit(clientIdentity);
+      } catch (error) {
+        console.error('Could not apply the admin login rate limit.', error);
+        return adminHtml(
+          loginPage(
+            options.basePath,
+            'Sign-in is temporarily unavailable. Try again shortly.',
+          ),
+          503,
+        );
+      }
+      if (!limit.allowed) {
+        return adminHtml(
+          loginPage(options.basePath, 'Too many sign-in attempts. Try again later.'),
+          429,
+          { 'Retry-After': String(limit.retryAfterSeconds) },
+        );
+      }
+      const form = await request.formData();
+      const passwordValue = form.get('password');
+      const password = typeof passwordValue === 'string' ? passwordValue : '';
+      if (!sameSecret(password, options.password)) {
+        return adminHtml(loginPage(options.basePath, 'Incorrect password.'), 401);
+      }
+      return redirectResponse(
+        request,
+        `${options.basePath}/`,
+        cookieValue(issueSession(options.sessionSecret), options.basePath, options.secureCookie),
+      );
     }
-    try {
-      const query = dashboardQuery(request.query);
-      response.type('html').send(dashboardPage(await options.snapshot(query), options.basePath, query));
-    } catch (error) {
-      console.error('Could not load the admin database snapshot.', error);
-      response.status(500).type('html').send(page('Admin unavailable', '<main class="login-shell"><section class="login-card"><span class="eyebrow">miseshare operations</span><h1>Dashboard unavailable</h1><p>The database snapshot could not be loaded. Try again shortly.</p></section></main>'));
-    }
-  });
 
-  router.post('/login', async (request, response) => {
-    let limit: Awaited<ReturnType<typeof options.rateLimit>>;
-    try {
-      limit = await options.rateLimit(clientIdentity(request));
-    } catch (error) {
-      console.error('Could not apply the admin login rate limit.', error);
-      response.status(503).type('html').send(loginPage(options.basePath, 'Sign-in is temporarily unavailable. Try again shortly.'));
-      return;
+    if (request.method === 'POST' && pathname.endsWith('/logout')) {
+      return redirectResponse(
+        request,
+        `${options.basePath}/`,
+        expiredCookie(options.basePath, options.secureCookie),
+      );
     }
-    if (!limit.allowed) {
-      response.set('Retry-After', String(limit.retryAfterSeconds));
-      response.status(429).type('html').send(loginPage(options.basePath, 'Too many sign-in attempts. Try again later.'));
-      return;
-    }
-    const password = typeof request.body?.password === 'string' ? request.body.password : '';
-    if (!sameSecret(password, options.password)) {
-      response.status(401).type('html').send(loginPage(options.basePath, 'Incorrect password.'));
-      return;
-    }
-    response.setHeader('Set-Cookie', cookieValue(issueSession(options.sessionSecret), options.basePath, options.secureCookie));
-    response.redirect(303, `${options.basePath}/`);
-  });
 
-  router.post('/logout', (_, response) => {
-    response.setHeader('Set-Cookie', expiredCookie(options.basePath, options.secureCookie));
-    response.redirect(303, `${options.basePath}/`);
+    return adminHtml(
+      page(
+        'Not found',
+        '<main class="login-shell"><section class="login-card"><h1>Not found</h1></section></main>',
+      ),
+      404,
+    );
+  };
+}
+
+const adminHeaders = {
+  'Cache-Control': 'private, no-store',
+  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+};
+
+function adminHtml(body: string, status = 200, headers?: HeadersInit) {
+  return new Response(body, { status, headers: { ...adminHeaders, 'Content-Type': 'text/html; charset=utf-8', ...headers } });
+}
+
+function adminJson(body: unknown, status = 200) {
+  return Response.json(body, { status, headers: adminHeaders });
+}
+
+function redirectResponse(request: Request, pathname: string, cookie: string) {
+  return new Response(null, {
+    status: 303,
+    headers: {
+      ...adminHeaders,
+      Location: new URL(pathname, request.url).toString(),
+      'Set-Cookie': cookie,
+    },
   });
-  return router;
 }
 
 function validSession(cookieHeader: string | undefined, secret: string, now = Date.now()) {
@@ -110,10 +160,6 @@ function cookieValue(token: string, basePath: string, secure: boolean) {
 
 function expiredCookie(basePath: string, secure: boolean) {
   return `${SESSION_COOKIE}=; Path=${basePath}; HttpOnly; SameSite=Strict; Max-Age=0${secure ? '; Secure' : ''}`;
-}
-
-function clientIdentity(request: Request) {
-  return request.ip || request.socket.remoteAddress || 'unknown';
 }
 
 function loginPage(basePath: string, error = '') {

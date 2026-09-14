@@ -3,9 +3,9 @@ node_modules/
 .env.*
 !.env.example
 .vercel/
+.output/
 .playwright/
+.artifacts/qa/
 coverage/
-public/admin.js
-public/app.js
 .DS_Store
 npm-debug.log*
