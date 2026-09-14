@@ -6,6 +6,7 @@ export interface ServerEnvironment {
   databaseUrl: string
   emotesEnabled: boolean
   migrateOnStartup: boolean
+  observability: boolean
   participantCapacity: number
   rateLimiting: boolean
   requestLogging: boolean
@@ -54,6 +55,11 @@ export function parseServerEnvironment(runtimeEnvironment: NodeJS.ProcessEnv): S
     databaseUrl,
     emotesEnabled: environmentBoolean(runtimeEnvironment, 'EMOTES_ENABLED', true),
     migrateOnStartup: !runtimeEnvironment.VERCEL,
+    observability: environmentBoolean(
+      runtimeEnvironment,
+      'OBSERVABILITY_ENABLED',
+      Boolean(runtimeEnvironment.VERCEL || runtimeEnvironment.NODE_ENV === 'production'),
+    ),
     participantCapacity,
     rateLimiting: environmentBoolean(runtimeEnvironment, 'RATE_LIMIT_ENABLED', true),
     requestLogging: environmentBoolean(

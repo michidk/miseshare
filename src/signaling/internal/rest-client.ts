@@ -2,6 +2,7 @@ import type {
   CreateRoomRequest,
   JoinRoomRequest,
   OutgoingSignal,
+  RtcTelemetry,
   RoomCredentials,
   SignalBatch,
   SignalEnvelope,
@@ -60,6 +61,14 @@ export class RestSignalingSession {
 
   async send(signal: OutgoingSignal) {
     await this.request(`/rooms/${this.roomId}/signals`, { method: 'POST', body: JSON.stringify(signal) });
+  }
+
+  async telemetry(event: RtcTelemetry) {
+    await this.request(`/rooms/${this.roomId}/telemetry`, {
+      method: 'POST',
+      body: JSON.stringify(event),
+      keepalive: true,
+    })
   }
 
   async leave() {

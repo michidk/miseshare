@@ -396,6 +396,41 @@ test('landing page does not overflow a mobile viewport', async ({ page }) => {
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
 });
 
+test('admin dashboard distinguishes server failures from signed-out sessions', async ({ page }) => {
+  let available = false;
+  await page.route('**/admin/data*', async (route) => {
+    if (!available) {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        content: '<section data-testid="admin-snapshot">Recovered snapshot</section>',
+        generatedAt: Date.now(),
+        title: 'Overview',
+        view: 'overview',
+      }),
+    });
+  });
+
+  await page.goto('/admin/');
+  await expect(page.getByRole('heading', { name: 'Dashboard unavailable' })).toBeVisible();
+  await expect(page.getByText('temporarily unavailable')).toBeVisible();
+
+  available = true;
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByTestId('admin-snapshot')).toHaveText('Recovered snapshot');
+  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible();
+
+  available = false;
+  await expect(page.getByText('Showing the last successful snapshot.')).toBeVisible({
+    timeout: 7_000,
+  });
+  await expect(page.getByTestId('admin-snapshot')).toHaveText('Recovered snapshot');
+});
+
 async function pixelHash(locator: import('@playwright/test').Locator) {
   return locator.evaluate((source: HTMLCanvasElement | HTMLVideoElement) => {
     const width = source instanceof HTMLVideoElement ? source.videoWidth : source.width;

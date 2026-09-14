@@ -1,4 +1,5 @@
 import { buildRoomRequestHandler } from './internal/fetch-handler.js'
+import { createRoomObserver } from './internal/observability.js'
 import { PostgresRoomStore } from './internal/postgres-store.js'
 import { RoomService } from './internal/service.js'
 import type {
@@ -22,11 +23,16 @@ export interface RoomApi {
 
 export function createRoomApi(options: {
   databaseUrl: string
+  observability?: boolean
+  observabilitySecret?: string
   participantCapacity: number
   rateLimiting?: boolean
 }): RoomApi {
   const store: RoomStore = new PostgresRoomStore(options.databaseUrl, options.participantCapacity)
-  const service = new RoomService(store, Date.now, options.rateLimiting ?? true)
+  const observer = options.observability
+    ? createRoomObserver(options.observabilitySecret ?? options.databaseUrl)
+    : undefined
+  const service = new RoomService(store, Date.now, options.rateLimiting ?? true, observer)
   return {
     handleRequest: buildRoomRequestHandler(service),
     adminSnapshot: (query) => store.adminSnapshot(query),

@@ -48,3 +48,30 @@ test('browser departure closes the room when the host leaves', async (context) =
 
   assert.equal(url, '/api/rooms/room-test');
 });
+
+test('connection telemetry uses the authenticated room endpoint', async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => { globalThis.fetch = originalFetch; });
+  let request: { url: string; init?: RequestInit } | undefined;
+  globalThis.fetch = (async (input, init) => {
+    request = { url: String(input), init };
+    return new Response(null, { status: 204 });
+  }) as typeof fetch;
+  const session = new RestSignalingSession('/api', {
+    roomId: 'room-test',
+    participant: { id: 'guest-12345', name: 'Guest', isHost: false },
+    participantToken: 'secret',
+    hostId: 'host-12345',
+    participants: [],
+  });
+
+  await session.telemetry({
+    type: 'connection-route',
+    peerId: 'host-12345',
+    route: 'relay',
+  });
+
+  assert.equal(request?.url, '/api/rooms/room-test/telemetry');
+  assert.equal(request?.init?.method, 'POST');
+  assert.equal(new Headers(request?.init?.headers).get('authorization'), 'Bearer secret');
+});

@@ -95,6 +95,15 @@ async function handleRoomRequest(service: RoomService, request: Request, clientI
     )
     return new Response(null, { status: 202 })
   }
+  if (request.method === 'POST' && segments[1] === 'telemetry' && segments.length === 2) {
+    requireJson(request)
+    await service.enforceRateLimit('rtc-telemetry', `${clientIdentity}:${identity.participantId}`, {
+      limit: 120,
+      windowMs: 60_000,
+    })
+    await service.recordTelemetry(id, identity.participantId, identity.token, await json(request))
+    return new Response(null, { status: 204 })
+  }
   if (request.method === 'GET' && segments[1] === 'signals' && segments.length === 2) {
     return Response.json(
       await service.readSignals(

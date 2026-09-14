@@ -11,3 +11,19 @@
   --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
   --font-display: "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, sans-serif;
 }
+
+.admin-error-banner {
+  padding: 10px clamp(18px, 3vw, 42px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid color-mix(in srgb, #ff7882 30%, transparent);
+  color: #ffc5c9;
+  background: color-mix(in srgb, #ff7882 10%, #0d1017);
+}
+
+.admin-error-banner button {
+  min-height: 32px;
+  flex: none;
+}

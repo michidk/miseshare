@@ -109,15 +109,28 @@ export function createAdminHandler(options: {
 
 const adminHeaders = {
   'Cache-Control': 'private, no-store',
-  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
 };
 
 function adminHtml(body: string, status = 200, headers?: HeadersInit) {
-  return new Response(body, { status, headers: { ...adminHeaders, 'Content-Type': 'text/html; charset=utf-8', ...headers } });
+  return new Response(body, {
+    status,
+    headers: {
+      ...adminHeaders,
+      'Content-Security-Policy': adminContentSecurityPolicy(body),
+      'Content-Type': 'text/html; charset=utf-8',
+      ...headers,
+    },
+  });
 }
 
 function adminJson(body: unknown, status = 200) {
-  return Response.json(body, { status, headers: adminHeaders });
+  return Response.json(body, {
+    status,
+    headers: {
+      ...adminHeaders,
+      'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
+    },
+  });
 }
 
 function redirectResponse(request: Request, pathname: string, cookie: string) {
@@ -125,10 +138,19 @@ function redirectResponse(request: Request, pathname: string, cookie: string) {
     status: 303,
     headers: {
       ...adminHeaders,
+      'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
       Location: new URL(pathname, request.url).toString(),
       'Set-Cookie': cookie,
     },
   });
+}
+
+function adminContentSecurityPolicy(body: string) {
+  const inlineStyle = body.match(/<style>([\s\S]*?)<\/style>/i)?.[1]
+  const styleSource = inlineStyle
+    ? ` 'sha256-${createHash('sha256').update(inlineStyle).digest('base64')}'`
+    : ''
+  return `default-src 'none'; style-src 'self'${styleSource}; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`
 }
 
 function validSession(cookieHeader: string | undefined, secret: string, now = Date.now()) {

@@ -6,6 +6,7 @@ import type {
   RoomCredentials,
   RoomParticipant,
   SignalBatch,
+  RtcTelemetry,
 } from '../../signaling/index.js';
 import { guestIdentity } from '../../room/index.js';
 import { passwordHash, randomToken, tokenHash, verifyPassword } from './crypto.js';
@@ -21,11 +22,18 @@ export class RoomApiError extends Error {
   }
 }
 
+export type RoomObservation =
+  | { type: 'room-created'; roomId: string; participantId: string; protected: boolean }
+  | { type: 'room-joined'; roomId: string; participantId: string }
+  | { type: 'signal-failed'; roomId: string; participantId: string; code: string }
+  | ({ roomId: string; participantId: string } & RtcTelemetry);
+
 export class RoomService {
   constructor(
     private readonly store: RoomStore,
     private readonly now: () => number = Date.now,
     private readonly rateLimiting = true,
+    private readonly observe: (event: RoomObservation) => void = () => {},
   ) {}
 
   async createRoom(input: CreateRoomRequest): Promise<RoomCredentials> {
@@ -47,6 +55,12 @@ export class RoomService {
       tokenHash: tokenHash(participantToken),
       isHost: true,
       lastSeenAt: now,
+    });
+    this.observe({
+      type: 'room-created',
+      roomId,
+      participantId: hostId,
+      protected: Boolean(password),
     });
     return {
       roomId,
@@ -79,6 +93,7 @@ export class RoomService {
     }, now);
     if (result.status === 'full') throw new RoomApiError('room-full', 409, 'The service has reached its participant capacity.');
     if (result.status === 'unavailable') throw unavailable();
+    this.observe({ type: 'room-joined', roomId, participantId });
     const participant = { id: participantId, name: result.participant.name, isHost: false };
     return {
       roomId,
@@ -108,20 +123,40 @@ export class RoomService {
   }
 
   async sendSignal(roomId: string, participantId: string, token: string, signal: OutgoingSignal) {
-    const now = this.now();
-    await this.requireParticipant(roomId, participantId, token, now);
-    if (!validParticipantId(signal.recipientId) || !['description', 'candidate'].includes(signal.kind)
-      || signal.payload === undefined || JSON.stringify(signal.payload).length > 128 * 1024) {
-      throw new RoomApiError('invalid-signal', 400, 'The signaling message is invalid.');
+    try {
+      const now = this.now();
+      await this.requireParticipant(roomId, participantId, token, now);
+      if (!validParticipantId(signal.recipientId) || !['description', 'candidate'].includes(signal.kind)
+        || signal.payload === undefined || JSON.stringify(signal.payload).length > 128 * 1024) {
+        throw new RoomApiError('invalid-signal', 400, 'The signaling message is invalid.');
+      }
+      if (!await this.store.appendSignal({
+        roomId,
+        senderId: participantId,
+        recipientId: signal.recipientId,
+        kind: signal.kind,
+        payload: signal.payload,
+        now,
+      })) throw unavailable();
+    } catch (error) {
+      this.observe({
+        type: 'signal-failed',
+        roomId,
+        participantId,
+        code: error instanceof RoomApiError ? error.code : 'internal-error',
+      });
+      throw error;
     }
-    if (!await this.store.appendSignal({
-      roomId,
-      senderId: participantId,
-      recipientId: signal.recipientId,
-      kind: signal.kind,
-      payload: signal.payload,
-      now,
-    })) throw unavailable();
+  }
+
+  async recordTelemetry(
+    roomId: string,
+    participantId: string,
+    token: string,
+    value: unknown,
+  ) {
+    await this.requireParticipant(roomId, participantId, token, this.now());
+    this.observe({ roomId, participantId, ...rtcTelemetry(value) });
   }
 
   async readSignals(roomId: string, participantId: string, token: string, after: number): Promise<SignalBatch> {
@@ -153,6 +188,37 @@ export class RoomService {
     if (!validParticipantId(participantId) || !token
       || !await this.store.authenticate(roomId, participantId, tokenHash(token), now)) throw unavailable();
   }
+}
+
+function rtcTelemetry(value: unknown): RtcTelemetry {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new RoomApiError('invalid-telemetry', 400, 'The telemetry event is invalid.');
+  }
+  const event = value as Record<string, unknown>;
+  if (!validParticipantId(event.peerId)) {
+    throw new RoomApiError('invalid-telemetry', 400, 'The telemetry event is invalid.');
+  }
+  if (
+    event.type === 'connection-state' &&
+    typeof event.state === 'string' &&
+    ['new', 'connecting', 'connected', 'disconnected', 'failed', 'closed', 'recovering'].includes(
+      event.state,
+    )
+  ) {
+    return {
+      type: event.type,
+      peerId: event.peerId,
+      state: event.state as Extract<RtcTelemetry, { type: 'connection-state' }>['state'],
+    };
+  }
+  if (
+    event.type === 'connection-route' &&
+    typeof event.route === 'string' &&
+    ['direct', 'relay', 'unknown'].includes(event.route)
+  ) {
+    return { type: event.type, peerId: event.peerId, route: event.route as 'direct' | 'relay' | 'unknown' };
+  }
+  throw new RoomApiError('invalid-telemetry', 400, 'The telemetry event is invalid.');
 }
 
 function publicParticipant(participant: StoredParticipant): RoomParticipant {

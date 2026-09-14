@@ -40,12 +40,9 @@ bun run db:migrate
 
 ## Deploy to Vercel
 
-Provision a Neon PostgreSQL database from the Vercel Marketplace, connect it to the project, and run the migration with the production `DATABASE_URL`. `bun run build` selects Nitro's Vercel preset when Vercel sets its build environment; outside Vercel it emits the Bun production server at `.output/server/index.mjs` for `bun run start`.
+Provision a Neon PostgreSQL database from the Vercel Marketplace and connect it to the project. Hosted production builds run committed Drizzle migrations under a PostgreSQL advisory lock before compiling and promoting the deployment. Preview and local Vercel builds skip production migrations. Keep schema changes backward-compatible with the currently deployed application so the migration and code promotion remain safe during rolling deployments. `bun run build` selects Nitro's Vercel preset when Vercel sets its build environment; outside Vercel it emits the Bun production server at `.output/server/index.mjs` for `bun run start`.
 
 ```bash
-bunx vercel@latest env pull .env.production.local --environment=production
-set -a && source .env.production.local && set +a
-bun run db:migrate
 bunx vercel@latest --prod
 ```
 
@@ -66,6 +63,7 @@ Vercel serves the Nitro output and public assets from its CDN and runs the room 
 | `TRUST_PROXY` | `false` (Vercel configures one trusted hop) | Trust proxy-derived client IPs for rate limits; enable only behind a trusted proxy |
 | `RATE_LIMIT_ENABLED` | `true` | Enforce PostgreSQL-backed create, join, signal, and admin-login limits across instances |
 | `REQUEST_LOGGING` | production/Vercel: `true`; otherwise `false` | Emit structured request ID, status, path, and duration logs; server errors are always logged |
+| `OBSERVABILITY_ENABLED` | production/Vercel: `true`; otherwise `false` | Emit structured room lifecycle, signaling-failure, peer-state, and direct/TURN route events with HMAC-anonymized identifiers |
 | `VITE_HEAD_HTML` | _(empty)_ | Trusted markup injected verbatim into the app `<head>` at server startup |
 | `EMOTES_ENABLED` | `true` | Load the global emote catalog and serve assets through the same-origin image proxy |
 | `STUN_URLS` | `stun:stun.l.google.com:19302` | Comma-separated STUN URLs; non-STUN entries are ignored |
@@ -78,9 +76,10 @@ When `STUN_URLS` contains multiple servers, browsers may query them concurrently
 `VITE_HEAD_HTML` accepts complete tags, such as a Meta Pixel `<script>` or a
 site-verification `<meta>` tag. Treat it as trusted executable configuration:
 never populate it from user input or another untrusted source. When configured,
-the app page's content security policy permits inline scripts and HTTPS origins
-needed by third-party analytics. Leave it unset to inject nothing and retain the
-strict default policy.
+the app page's content security policy adds the request nonce to injected script
+and style tags and permits HTTPS origins needed by third-party analytics. Inline
+event-handler attributes are intentionally unsupported. Leave it unset to inject
+nothing and retain the strict default policy.
 
 For reliable connectivity across restrictive NATs and corporate networks, deploy coturn with its REST API shared-secret mechanism, then set `TURN_URLS` and `TURN_SHARED_SECRET`. The app creates short-lived HMAC credentials per `/config` request and refreshes them before ICE recovery; the shared secret never leaves the server. A normal HTTP reverse proxy does not replace TURN because it cannot relay WebRTC media.
 
@@ -109,7 +108,7 @@ The full-mesh layout is ideal for small groups. Its bandwidth and connection cou
 
 ## Operations and verification
 
-`GET /health/live` checks the process; `GET /health/ready` (and the compatibility endpoint `GET /health`) checks PostgreSQL readiness. Successful requests include an `X-Request-Id` header. The `/admin` dashboard paginates in PostgreSQL and intentionally redacts password hashes, participant tokens, and signaling payloads.
+`GET /health/live` checks the process; `GET /health/ready` (and the compatibility endpoint `GET /health`) checks PostgreSQL readiness. Successful requests include an `X-Request-Id` header. Production logs include structured request timing plus anonymized room lifecycle and WebRTC connectivity events; `turnUsed: true` identifies relay usage without logging room codes or participant IDs. The `/admin` dashboard paginates in PostgreSQL, preserves its last successful snapshot during transient failures, and intentionally redacts password hashes, participant tokens, and signaling payloads.
 
 Run the normal verification suite with `bun run verify`. To include the two-browser room flow and mobile-layout checks in Chromium and Firefox, install the browsers once and run the full suite:
 

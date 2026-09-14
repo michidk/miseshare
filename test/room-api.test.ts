@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { guestIdentity } from '../src/room/index.js';
 import { withUniqueGuestName } from '../src/room-api/internal/guest-name.js';
+import { roomObservationPayload } from '../src/room-api/internal/observability.js';
 import { RoomApiError, RoomService } from '../src/room-api/internal/service.js';
 import type { RoomStore, StoredParticipant } from '../src/room-api/internal/types.js';
 
@@ -89,6 +90,53 @@ test('a participant cannot kick themselves', async () => {
     () => service.kickParticipant('room-test', 'host-12345', 'secret', 'host-12345'),
     (error) => error instanceof RoomApiError && error.status === 404,
   );
+});
+
+test('WebRTC telemetry is authenticated and schema-validated', async () => {
+  const observations: unknown[] = [];
+  const store = {
+    authenticate: async () => storedParticipant('guest-12345', 'Guest'),
+  } as unknown as RoomStore;
+  const service = new RoomService(store, () => 1_000, false, (event) => observations.push(event));
+
+  await service.recordTelemetry('room-test', 'guest-12345', 'secret', {
+    type: 'connection-route',
+    peerId: 'host-12345',
+    route: 'relay',
+  });
+
+  assert.deepEqual(observations, [{
+    type: 'connection-route',
+    roomId: 'room-test',
+    participantId: 'guest-12345',
+    peerId: 'host-12345',
+    route: 'relay',
+  }]);
+  await assert.rejects(
+    () => service.recordTelemetry('room-test', 'guest-12345', 'secret', {
+      type: 'connection-route',
+      peerId: 'host-12345',
+      route: 'untrusted',
+    }),
+    (error) => error instanceof RoomApiError && error.code === 'invalid-telemetry',
+  );
+});
+
+test('observability payloads anonymize connection identifiers and flag TURN usage', () => {
+  const payload = roomObservationPayload('test-observability-secret', {
+    type: 'connection-route',
+    roomId: 'room-test',
+    participantId: 'guest-12345',
+    peerId: 'host-12345',
+    route: 'relay',
+  });
+  const serialized = JSON.stringify(payload);
+
+  assert.equal(payload.type, 'room-event');
+  assert.equal(payload.event, 'connection-route');
+  assert.equal(payload.turnUsed, true);
+  assert.doesNotMatch(serialized, /room-test|guest-12345|host-12345/);
+  assert.match(String(payload.room), /^[a-f0-9]{16}$/);
 });
 
 function storedParticipant(id: string, name: string): StoredParticipant {

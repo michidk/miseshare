@@ -22,6 +22,8 @@ async function createServerRuntime() {
     databaseUrl: environment.databaseUrl,
     participantCapacity: environment.participantCapacity,
     rateLimiting: environment.rateLimiting,
+    observability: environment.observability,
+    observabilitySecret: environment.adminSessionSecret,
   })
   // Vercel functions do not package the repository's Drizzle migration files. Production
   // migrations run explicitly through `bun run db:migrate` before deployment instead.

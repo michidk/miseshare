@@ -208,6 +208,7 @@ const participantIds = new Set<string>();
 const participantNames = new Map<string, string>();
 const chatHistory: ChatEntry[] = [];
 const connectivityResults = new Map<string, ConnectivityResult>();
+const observedConnectionRoutes = new Map<string, 'direct' | 'relay' | 'unknown'>();
 const pendingConnectivityPings = new Map<string, PendingConnectivityPing>();
 const pendingConnectivityDownloads = new Map<string, PendingConnectivityTransfer>();
 const pendingConnectivityUploads = new Map<string, PendingConnectivityTransfer>();
@@ -446,6 +447,7 @@ function startNativeMesh(roomSignaling: RestSignalingSession) {
     peerClosed: handlePeerClosed,
     mediaTrack: receiveMediaTrack,
     refreshConfiguration: loadClientConfiguration,
+    connectionState: observeConnectionState,
     error: (_, error) => showToast(error.message || 'A peer connection failed.', 'error'),
   });
   roomSignaling.onSignal((signal) => mesh?.handleSignal(signal));
@@ -454,6 +456,27 @@ function startNativeMesh(roomSignaling: RestSignalingSession) {
     else showToast('The room service connection expired.', 'error');
   });
   roomSignaling.start();
+}
+
+function observeConnectionState(
+  peerId: string,
+  state: RTCPeerConnectionState | 'recovering',
+) {
+  const activeSignaling = signaling;
+  void activeSignaling?.telemetry({ type: 'connection-state', peerId, state }).catch(() => {});
+  if (state !== 'connected' || !activeSignaling) return;
+  window.setTimeout(() => {
+    if (signaling === activeSignaling) void observeConnectionRoute(activeSignaling, peerId);
+  }, 1_000);
+}
+
+async function observeConnectionRoute(roomSignaling: RestSignalingSession, peerId: string) {
+  const stats = await mesh?.connectionStats(peerId).catch(() => undefined);
+  if (!stats || observedConnectionRoutes.get(peerId) === stats.route) return;
+  observedConnectionRoutes.set(peerId, stats.route);
+  await roomSignaling
+    .telemetry({ type: 'connection-route', peerId, route: stats.route })
+    .catch(() => {});
 }
 
 function routePeer(peerConnection: RtcPeerChannels) {
@@ -2770,6 +2793,7 @@ async function leaveRoom() {
 function disposeConnections() {
   toggleConnectivityPanel(false);
   connectivityResults.clear();
+  observedConnectionRoutes.clear();
   drop.clear();
   clearDropTransfers();
   stopLocalAudioMix();

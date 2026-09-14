@@ -25,10 +25,6 @@ export interface RtcConnectionStats {
   packetLossPercent?: number;
 }
 
-export type RtcSignal =
-  | { kind: 'description'; payload: RTCSessionDescriptionInit }
-  | { kind: 'candidate'; payload: RTCIceCandidateInit };
-
 export interface RtcMeshEvents {
   peerAvailable(peer: RtcPeerChannels): void;
   peerClosed(peerId: string): void;

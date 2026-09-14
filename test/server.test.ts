@@ -3,6 +3,7 @@ import net from 'node:net';
 import type { Readable } from 'node:stream';
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { Pool } from 'pg';
 import { parseServerEnvironment } from '../src/lib/server/env.server.js';
 
 type ParticipantIdentity = {
@@ -134,7 +135,7 @@ test('rejects an undersized admin session secret', () => {
   );
 });
 
-test('leaves database migrations to the explicit deployment step on Vercel', () => {
+test('leaves database migrations to the Vercel build instead of cold starts', () => {
   const environment = parseServerEnvironment({
     DATABASE_URL: 'postgresql://example.test/db',
     ADMIN_PASSWORD: 'test-password',
@@ -157,11 +158,16 @@ test('uses Google STUN and keeps trusted head origins disabled when optional con
   await waitForServer(`http://127.0.0.1:${port}`);
   try {
     const response = await fetch(`http://127.0.0.1:${port}/`);
-    assert.doesNotMatch(await response.text(), /__headHtmlLoaded|facebook\.com/);
+    const page = await response.text();
+    assert.doesNotMatch(page, /__headHtmlLoaded|facebook\.com/);
     const policy = requiredHeader(response, 'content-security-policy');
     assert.doesNotMatch(policy, /connect-src[^;]*https:|img-src[^;]*https:/);
     assert.match(policy, /font-src 'self' https:\/\/fonts\.gstatic\.com data:/);
-    assert.match(policy, /script-src 'self' 'unsafe-inline';/);
+    const nonce = policy.match(/script-src 'self' 'nonce-([^']+)';/)?.[1];
+    assert.ok(nonce);
+    assert.match(policy, new RegExp(`style-src 'self' 'nonce-${nonce}'`));
+    assert.doesNotMatch(policy, /unsafe-inline/);
+    assert.match(page, new RegExp(`<script nonce="${nonce}"`));
     const config = await fetch(`http://127.0.0.1:${port}/config`).then((result) => result.json());
     assert.deepEqual(config, { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
   } finally {
@@ -204,6 +210,9 @@ test('applies shared API rate limits with a retry interval', async () => {
 });
 
 test('ignores spoofable client IP headers when proxy trust is disabled', async () => {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  await pool.query('delete from request_rate_limits');
+  await pool.end();
   const port = await getAvailablePort();
   const rateLimitedApp = startServer(port, {
       ...process.env,
@@ -279,21 +288,23 @@ test('serves the app and public client configuration', async () => {
   assert.ok(landing.headers.get('x-request-id'));
   const landingPolicy = requiredHeader(landing, 'content-security-policy');
   const landingPage = await landing.text();
+  const nonce = landingPolicy.match(/script-src 'self' 'nonce-([^']+)' https:/)?.[1];
+  assert.ok(nonce);
   assert.match(landingPolicy, /connect-src 'self' https:/);
   assert.match(landingPolicy, /img-src 'self' data: https:/);
-  assert.match(landingPolicy, /script-src 'self' 'unsafe-inline' https:/);
+  assert.match(landingPolicy, new RegExp(`style-src 'self' 'nonce-${nonce}'`));
+  assert.doesNotMatch(landingPolicy, /unsafe-inline/);
+  assert.match(landingPage, new RegExp(`<script nonce="${nonce}">window\\.__headHtmlLoaded`));
   assert.match(landingPage, /<title>miseshare — Free Peer-to-Peer Screen Sharing<\/title>/);
   assert.match(landingPage, /<link rel="canonical" href="https:\/\/miseshare\.vercel\.app\/"/);
   assert.match(landingPage, /<meta name="robots" content="index, follow,/);
   assert.match(landingPage, /<meta property="og:image" content="https:\/\/miseshare\.vercel\.app\/social-thumbnail\.png"/);
   assert.match(landingPage, /<meta name="twitter:card" content="summary_large_image"/);
   assert.match(landingPage, /"@type":"WebApplication"/);
-  assert.ok(landingPage.includes(headHtml));
   assert.match(landingPage, /assets\/index-[^"']+\.js/);
   assert.match(landingPage, /<noscript><img src="https:\/\/www\.facebook\.com\/tr\?id=test"/);
   assert.equal(room.status, 200);
   const page = await room.text();
-  assert.ok(page.includes(headHtml));
   assert.equal(room.headers.get('x-robots-tag'), 'noindex, nofollow, noarchive');
   assert.match(page, /<meta name="robots" content="noindex, nofollow, noarchive"\s*\/>/);
   assert.doesNotMatch(page, /<meta name="robots" content="index, follow,/);
@@ -487,6 +498,17 @@ test('room API relays authenticated WebRTC signaling through a durable mailbox',
   assert.equal(batch.signals[0].senderId, viewer.participant.id);
   assert.equal(batch.signals[0].recipientId, host.participant.id);
   assert.deepEqual(batch.signals[0].payload, offer);
+
+  const telemetry = await roomRequest(`/${host.roomId}/telemetry`, {
+    identity: viewer,
+    method: 'POST',
+    body: JSON.stringify({
+      type: 'connection-route',
+      peerId: host.participant.id,
+      route: 'relay',
+    }),
+  });
+  assert.equal(telemetry.status, 204);
 
   const unauthorized = await roomRequest(`/${host.roomId}/signals?after=0`);
   assert.equal(unauthorized.status, 401);

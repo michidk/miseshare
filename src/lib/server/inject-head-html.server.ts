@@ -15,6 +15,24 @@ export function injectHeadHtml(response: Response, headHtml?: string): Response 
   })
 }
 
+export async function applyHtmlNonce(response: Response, nonce: string): Promise<Response> {
+  if (!isInjectableHtmlResponse(response)) return response
+
+  const headers = new Headers(response.headers)
+  headers.delete('content-length')
+  const html = await response.text()
+  const securedHtml = html.replace(
+    /<(script|style)(\s[^>]*)?>/gi,
+    (openingTag, tagName: string, attributes = '') =>
+      /\snonce\s*=/i.test(attributes) ? openingTag : `<${tagName} nonce="${nonce}"${attributes}>`,
+  )
+  return new Response(securedHtml, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 function isInjectableHtmlResponse(response: Response): response is Response & {
   body: ReadableStream<Uint8Array>
 } {

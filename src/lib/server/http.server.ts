@@ -23,9 +23,9 @@ export function secureResponse(
   return secured
 }
 
-export function contentSecurityPolicy(allowTrustedHeadHtml = false) {
+export function contentSecurityPolicy(nonce: string, allowTrustedHeadHtml = false) {
   const httpsSource = allowTrustedHeadHtml ? ' https:' : ''
-  return `default-src 'self'; base-uri 'self'; connect-src 'self'${httpsSource}; font-src 'self' https://fonts.gstatic.com data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:${httpsSource}; media-src 'self' blob:; object-src 'none'; script-src 'self' 'unsafe-inline'${httpsSource}; style-src 'self' 'unsafe-inline' https:; worker-src 'self' blob:`
+  return `default-src 'self'; base-uri 'self'; connect-src 'self'${httpsSource}; font-src 'self' https://fonts.gstatic.com data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:${httpsSource}; media-src 'self' blob:; object-src 'none'; script-src 'self' 'nonce-${nonce}'${httpsSource}; style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com; worker-src 'self' blob:`
 }
 
 function logRequest(request: Request, response: Response, requestId: string, startedAt: number) {

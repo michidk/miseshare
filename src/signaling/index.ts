@@ -3,6 +3,7 @@ export type {
   CreateRoomRequest,
   JoinRoomRequest,
   OutgoingSignal,
+  RtcTelemetry,
   RoomCredentials,
   RoomParticipant,
   SignalBatch,
