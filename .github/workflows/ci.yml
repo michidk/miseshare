@@ -1,3 +1,6 @@
+# @orcastrate
+# template: projects/miseshare/ci
+# @end-orcastrate
 name: CI
 
 on:
