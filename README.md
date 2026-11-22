@@ -2,13 +2,13 @@
 
 A deliberately small, open-source screen and file sharing service. Create a room, send a link, and let several participants share at once—no accounts, installs, or persisted room history.
 
-[![miseshare landing page](.github/images/miseshare.png)](https://miseshare.vercel.app)
+<p align="center"><a href="https://miseshare.vercel.app">Open Miseshare</a> · <a href="#run-it-locally">Run locally</a> · <a href="#configuration">Configuration</a></p>
 
-Live demo: [miseshare.vercel.app](https://miseshare.vercel.app)
+<p align="center"><a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a></p>
 
-## Related project
+<p align="center"><a href="https://miseshare.vercel.app"><img src=".github/images/miseshare.png" width="800" alt="Miseshare room creation and sharing interface"></a></p>
 
-If a connection fails, use the in-room connection check or [icecheck](https://github.com/michidk/icecheck) ([live tool](https://icecheck.vercel.app)) to isolate signaling, ICE candidate, data-channel, and media-path problems between two browsers.
+To share your screen or files, open the app, create a room, and send its link to the other participants.
 
 Native WebRTC video tracks carry the 720p, 1080p, and 60 fps screen-sharing presets over encrypted browser connections. A configured TURN server can relay that encrypted traffic when a direct path is unavailable. A separate lossless text mode sends pixel-exact tile deltas over WebRTC data channels. File drops use a dedicated reliable data channel, begin only after each recipient accepts, and never upload file contents to the service. A small REST API stores temporary room admission and WebRTC signaling messages in PostgreSQL; it never receives screen, chat, audio, or file data.
 
@@ -122,3 +122,7 @@ Browser screenshots, videos, traces, and reports stay under `.playwright/`. CI a
 ## License
 
 MIT
+
+## Related project
+
+If a connection fails, use the in-room connection check or [icecheck](https://github.com/michidk/icecheck) ([live tool](https://icecheck.vercel.app)) to isolate signaling, ICE candidate, data-channel, and media-path problems between two browsers.
