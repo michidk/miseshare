@@ -1,6 +1,6 @@
 services:
   database:
-    image: postgres:18-alpine@sha256:123b17998ccaf47e53b502e8c6a1e79afd8f579c6f3eec83c563da026f957395
+    image: postgres:19-alpine@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f
     environment:
       POSTGRES_DB: miseshare
       POSTGRES_USER: miseshare
