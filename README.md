@@ -66,7 +66,7 @@ Vercel serves the Nitro output and public assets from its CDN and runs the room 
 | `OBSERVABILITY_ENABLED` | production/Vercel: `true`; otherwise `false` | Emit structured room lifecycle, signaling-failure, peer-state, and direct/TURN route events with HMAC-anonymized identifiers |
 | `VITE_HEAD_HTML` | _(empty)_ | Trusted markup injected verbatim into the app `<head>` at server startup |
 | `EMOTES_ENABLED` | `true` | Load the global emote catalog and serve assets through the same-origin image proxy |
-| `STUN_URLS` | `stun:stun.l.google.com:19302` | Comma-separated STUN URLs; non-STUN entries are ignored |
+| `STUN_URLS` | `stun:stun.lohr.dev:3478,stun:stun.l.google.com:19302` | Comma-separated STUN URLs, our own server first and Google as fallback; non-STUN entries are ignored |
 | `TURN_URLS` | _(empty)_ | Comma-separated `turn:` or `turns:` URLs for a coturn-compatible relay |
 | `TURN_SHARED_SECRET` | _(required with `TURN_URLS`)_ | coturn REST authentication secret; never sent to browsers |
 | `TURN_TTL_SECONDS` | `3600` | Lifetime of generated TURN credentials, from 60 to 86400 seconds |

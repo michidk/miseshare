@@ -72,7 +72,7 @@ export function parseServerEnvironment(runtimeEnvironment: NodeJS.ProcessEnv): S
       'SECURE_COOKIES',
       Boolean(runtimeEnvironment.VERCEL || runtimeEnvironment.NODE_ENV === 'production'),
     ),
-    stunUrls: runtimeEnvironment.STUN_URLS || 'stun:stun.l.google.com:19302',
+    stunUrls: runtimeEnvironment.STUN_URLS || 'stun:stun.lohr.dev:3478,stun:stun.l.google.com:19302',
     trustProxy: runtimeEnvironment.VERCEL
       ? true
       : environmentBoolean(runtimeEnvironment, 'TRUST_PROXY', false),

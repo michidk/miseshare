@@ -169,7 +169,7 @@ test('uses Google STUN and keeps trusted head origins disabled when optional con
     assert.doesNotMatch(policy, /unsafe-inline/);
     assert.match(page, new RegExp(`<script nonce="${nonce}"`));
     const config = await fetch(`http://127.0.0.1:${port}/config`).then((result) => result.json());
-    assert.deepEqual(config, { iceServers: [{ urls: ['stun:stun.l.google.com:19302'] }] });
+    assert.deepEqual(config, { iceServers: [{ urls: ['stun:stun.lohr.dev:3478', 'stun:stun.l.google.com:19302'] }] });
   } finally {
     appWithoutHeadHtml.kill('SIGTERM');
   }
